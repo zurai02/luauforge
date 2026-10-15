@@ -1,0 +1,2236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2a2d34">
+  <title>LuauForge</title>
+  <meta name="description" content="A free Luau and Roblox scripting assistant that runs entirely in your browser. No account, no API key.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3Cmask id='m'%3E%3Crect width='32' height='32' fill='%23fff'/%3E%3Ccircle cx='21.5' cy='12.5' r='9.6' fill='%23000'/%3E%3C/mask%3E%3C/defs%3E%3Ccircle cx='15.5' cy='17' r='12' fill='%235aa2ff' mask='url(%23m)'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+/* LuauForge: a workbench modelled on the places Roblox scripters already work.
+   Panels with hairline rules, an editor-style document, and an Output panel for checker results. */
+
+:root {
+  color-scheme: dark light;
+
+  --ground: #202228;      /* the editor surface */
+  --chrome: #2a2d34;      /* title bar and side rail */
+  --raised: #343842;
+  --rule: #3f434d;
+  --rule-soft: #343741;
+  --text: #e3e5ea;
+  --muted: #9aa0ac;
+  --faint: #6c7280;
+
+  --accent: #5aa2ff;
+  --accent-ink: #061a33;
+  --accent-soft: rgba(90, 162, 255, .15);
+  --ok: #78d19c;
+  --warn: #e7b04a;
+  --err: #f27c72;
+
+  --code-bg: #1b1d22;
+  --code-head: #25272d;
+  --k: #e58aa8;
+  --s: #9fd08f;
+  --n: #e6b673;
+  --c: #7a8292;
+  --b: #7cc4ee;
+
+  --sans: "Source Sans 3", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --mono: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --rail: 264px;
+  --measure: 70ch;
+  --column: 840px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ground: #f5f6f8;
+    --chrome: #e8eaee;
+    --raised: #ffffff;
+    --rule: #cdd1d9;
+    --rule-soft: #dde0e6;
+    --text: #1d2128;
+    --muted: #596070;
+    --faint: #8a91a0;
+
+    --accent: #1b66d6;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(27, 102, 214, .11);
+    --ok: #1d7a45;
+    --warn: #9a6200;
+    --err: #c0362c;
+
+    --code-bg: #ffffff;
+    --code-head: #eef0f3;
+    --k: #b5295a;
+    --s: #2f7a22;
+    --n: #9a5a00;
+    --c: #6f788a;
+    --b: #0b69a6;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  color: var(--text);
+  font: 16px/1.55 var(--sans);
+  overflow: hidden;
+}
+
+::selection { background: var(--accent-soft); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+button, select, input, textarea { font: inherit; color: inherit; }
+
+/* ---------------------------------------------------------------- controls */
+
+button {
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 5px 12px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:active:not(:disabled) { background: var(--chrome); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
+button.danger { background: transparent; border-color: var(--err); color: var(--err); }
+button[hidden] { display: none; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- title bar */
+
+.app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 12px 6px 14px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--rule);
+}
+
+.rail-toggle { display: none; padding: 5px 7px; line-height: 0; }
+
+.brand { display: flex; align-items: center; gap: 9px; }
+.mark { width: 24px; height: 24px; }
+.moon { fill: var(--accent); }
+.wordmark { font-size: 18px; font-weight: 700; letter-spacing: -.015em; }
+
+.pill {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 11px 2px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--ground);
+  color: var(--muted);
+  font-size: 14px;
+}
+.pill::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; vertical-align: 1px; border-radius: 50%; background: var(--faint); }
+.pill.ok { color: var(--text); }
+.pill.ok::before { background: var(--ok); }
+.pill.busy { color: var(--text); }
+.pill.busy::before { background: var(--warn); animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+.engine { min-width: 0; }
+.actions { margin-left: auto; display: flex; gap: 6px; }
+
+#progress { background: var(--chrome); border-bottom: 1px solid var(--rule); }
+#progress[hidden] { display: none; }
+.track { height: 3px; background: var(--rule-soft); }
+#bar { height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+#progressText { padding: 4px 14px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------------------------------------------------------------- workspace */
+
+.workspace { flex: 1; display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 0; }
+
+.rail {
+  background: var(--chrome);
+  border-right: 1px solid var(--rule);
+  overflow-y: auto;
+  padding: 14px 0 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+.rail section + section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule-soft); }
+.rail h2 { margin: 0 16px 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+
+.modes button {
+  display: block;
+  width: 100%;
+  padding: 5px 16px 5px 14px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  color: var(--text);
+}
+.modes button:hover { background: var(--accent-soft); }
+.modes button[aria-pressed="true"] { border-left-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
+.tree details { margin: 0; }
+.tree summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 16px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+}
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary::before { content: ""; flex: none; width: 6px; height: 6px; margin: 8px 8px 0 0; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .12s; }
+.tree details[open] > summary::before { transform: rotate(45deg); margin-top: 5px; }
+.tree summary span:first-of-type { flex: 1; }
+.tree summary:hover { background: var(--accent-soft); }
+.tree .n { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+.tree .note {
+  display: block;
+  width: 100%;
+  padding: 3px 16px 3px 38px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  color: var(--muted);
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree .note:hover { color: var(--text); background: var(--accent-soft); }
+.tree .muted { margin: 4px 16px; color: var(--faint); font-size: 14px; }
+
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--ground); }
+
+/* ---------------------------------------------------------------- conversation */
+
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 26px clamp(16px, 4vw, 48px) 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+#messages > * { max-width: var(--column); margin-left: auto; margin-right: auto; }
+
+.empty { margin-top: 5vh; }
+.blank { margin: 0 0 26px; font: 14px/1.75 var(--mono); color: var(--c); white-space: pre-wrap; }
+.starters { list-style: none; margin: 0; padding: 0; }
+.starters button {
+  display: flex;
+  gap: 12px;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  color: var(--text);
+}
+.starters button::before { content: ">"; font-family: var(--mono); font-weight: 600; color: var(--accent); }
+.starters button:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--accent); }
+
+.msg { margin-bottom: 28px; }
+
+.msg.user { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 8px; }
+.msg.user .glyph { font-family: var(--mono); font-weight: 600; color: var(--accent); line-height: 1.55; }
+.msg.user .body { font-weight: 600; }
+.msg.user .body .code { font-weight: 400; }
+
+.body { overflow-wrap: anywhere; }
+.body p, .body ul, .body ol, .body h2, .body h3, .body h4, .body h5 { max-width: var(--measure); }
+.body p { margin: 0 0 12px; }
+.body p:last-child { margin-bottom: 0; }
+.body h2, .body h3, .body h4, .body h5 { margin: 22px 0 8px; font-size: 1.12em; line-height: 1.3; font-weight: 700; letter-spacing: -.005em; }
+.body > h2:first-child, .body > h3:first-child, .body > h4:first-child { margin-top: 0; }
+.body ul, .body ol { margin: 0 0 12px; padding-left: 22px; }
+.body li { margin-bottom: 3px; }
+.body strong { font-weight: 700; }
+.body code {
+  font: .86em var(--mono);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--chrome);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--faint);
+}
+.meta .acts { display: flex; gap: 2px; }
+.meta button {
+  padding: 1px 7px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: transparent;
+}
+.meta button:hover:not(:disabled) { color: var(--text); text-decoration-color: currentColor; }
+
+.cut { margin-top: 10px; color: var(--warn); font-size: 14.5px; }
+.cut button { margin-left: 6px; }
+
+.selfcheck { margin: 0 0 14px; padding: 2px 0 2px 12px; border-left: 2px solid var(--warn); font-size: 14.5px; color: var(--muted); }
+.selfcheck ul { margin: 4px 0 0; }
+
+.draft { margin-bottom: 18px; padding: 8px 12px; border: 1px dashed var(--rule); border-radius: 4px; color: var(--muted); }
+.draft summary { cursor: pointer; font-size: 14.5px; }
+.draft .body { margin-top: 10px; }
+
+.cursor::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------------------------------------------------------------- code panes */
+
+.code {
+  margin: 14px 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-bg);
+  overflow: hidden;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 5px 0 14px;
+  background: var(--code-head);
+  border-bottom: 1px solid var(--rule);
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.code-head button { padding: 1px 9px; font-size: 13.5px; background: none; border-color: transparent; color: var(--muted); }
+.code-head button:hover:not(:disabled) { color: var(--text); border-color: var(--rule); }
+
+.code pre { margin: 0; padding: 10px 0; overflow-x: auto; counter-reset: ln; tab-size: 4; font: 13.5px/1.65 var(--mono); scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.body .code code { padding: 0; background: none; font: inherit; }
+.code .l { position: relative; display: block; min-width: max-content; min-height: 1.65em; padding: 0 18px 0 54px; white-space: pre; }
+.code .l::before {
+  counter-increment: ln;
+  content: counter(ln);
+  position: absolute;
+  left: 0;
+  width: 40px;
+  text-align: right;
+  color: var(--faint);
+  user-select: none;
+}
+
+.tk-k { color: var(--k); }
+.tk-s { color: var(--s); }
+.tk-n { color: var(--n); }
+.tk-c { color: var(--c); font-style: italic; }
+.tk-b { color: var(--b); }
+
+/* Output panel: the checker's results, set like Studio's Output window */
+.lint { border-top: 1px solid var(--rule); background: var(--code-head); font: 13px/1.55 var(--mono); }
+.out-head { display: flex; justify-content: space-between; gap: 12px; padding: 6px 14px; font: 600 13px/1.3 var(--sans); color: var(--muted); border-bottom: 1px solid var(--rule-soft); }
+.lint ul { margin: 0; padding: 6px 0; list-style: none; }
+.lint li { display: grid; grid-template-columns: 62px 58px minmax(0, 1fr); gap: 0 8px; padding: 2px 14px; }
+.lint .sev { font-weight: 600; }
+.lint .at { color: var(--faint); }
+.lint li.error .sev { color: var(--err); }
+.lint li.warn .sev { color: var(--warn); }
+.lint li.info .sev { color: var(--b); }
+.lint li.info .txt { color: var(--muted); }
+.lint .txt code { padding: 0 3px; font-size: 1em; background: none; border: 0; color: var(--b); }
+.lint.standalone { margin: 0 0 14px; border: 1px solid var(--rule); border-radius: 4px; }
+.lint .clean { margin: 0; padding: 9px 14px; color: var(--ok); }
+
+/* ---------------------------------------------------------------- composer */
+
+#status {
+  max-width: var(--column);
+  width: calc(100% - 2 * clamp(16px, 4vw, 48px));
+  margin: 0 auto;
+  font-size: 14.5px;
+  white-space: pre-wrap;
+}
+#status:not(:empty) { margin-bottom: 8px; padding: 4px 0 4px 12px; border-left: 2px solid var(--warn); }
+
+.compose { padding: 10px clamp(16px, 4vw, 48px) 12px; border-top: 1px solid var(--rule); }
+#composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: var(--column);
+  margin: 0 auto;
+  padding: 6px 6px 6px 12px;
+  background: var(--chrome);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+#composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#input {
+  flex: 1;
+  min-width: 0;
+  max-height: 220px;
+  padding: 6px 0;
+  resize: none;
+  background: none;
+  border: 0;
+  outline: 0;
+  font: 14.5px/1.55 var(--mono);
+}
+#input::placeholder { color: var(--faint); font-family: var(--sans); font-size: 15px; }
+#composer button { align-self: flex-end; height: 34px; }
+
+.hint-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px; max-width: var(--column); margin: 7px auto 0; font-size: 13.5px; color: var(--faint); }
+
+/* ---------------------------------------------------------------- dialogs */
+
+dialog {
+  width: min(580px, calc(100vw - 28px));
+  max-height: 92vh;
+  padding: 20px 22px;
+  background: var(--chrome);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+dialog::backdrop { background: rgba(8, 10, 14, .62); }
+dialog h2 { margin: 0 0 10px; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+dialog label { display: block; margin-bottom: 12px; font-size: 14.5px; color: var(--muted); }
+dialog label.check { display: flex; gap: 10px; align-items: flex-start; color: var(--text); }
+dialog label.check input { margin-top: 5px; }
+dialog input[type="text"], dialog input[type="number"], dialog select, dialog textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 10px;
+  background: var(--ground);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+dialog textarea { font: 13.5px/1.55 var(--mono); resize: vertical; }
+dialog details { margin-bottom: 12px; }
+dialog summary { margin-bottom: 8px; cursor: pointer; font-size: 14.5px; color: var(--muted); }
+.hint { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.row.left { justify-content: flex-start; }
+.filebtn { margin: 0 !important; padding: 5px 12px; border: 1px solid var(--rule); border-radius: 3px; background: var(--raised); color: var(--text) !important; cursor: pointer; line-height: 1.4; }
+
+.mem { margin: 14px 0 6px; padding: 0; max-height: 210px; overflow-y: auto; list-style: none; }
+.mem li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--rule-soft); }
+.mem li button { align-self: flex-start; padding: 1px 9px; font-size: 14px; }
+.mem .muted, .muted { color: var(--faint); font-size: 14px; }
+.checkout { margin-top: 12px; max-height: 240px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.checkout:empty { display: none; }
+.checkout .lint { border-top: 0; }
+
+/* ---------------------------------------------------------------- fatal banner */
+
+#fatal { padding: 10px 16px; background: #4a1a20; color: #ffe0dc; border-bottom: 1px solid #7a2630; font-size: 15px; white-space: pre-wrap; }
+#fatal[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- small screens */
+
+#scrim { display: none; }
+
+@media (max-width: 860px) {
+  .titlebar { flex-wrap: wrap; row-gap: 6px; }
+  .engine { flex: 1; }
+  .rail-toggle { display: block; }
+  .actions { order: 5; flex: 1 0 100%; margin-left: 0; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .actions button { flex: none; }
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    width: min(86vw, 320px);
+    padding-top: 18px;
+    transform: translateX(-102%);
+    visibility: hidden;
+    transition: transform .16s ease-out, visibility 0s .16s;
+  }
+  body.rail-open .rail { transform: none; visibility: visible; transition: transform .16s ease-out; }
+  body.rail-open #scrim { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(8, 10, 14, .55); }
+  .lint li { grid-template-columns: 58px 50px minmax(0, 1fr); gap: 0 6px; padding: 2px 10px; }
+  .hint-line span:last-child { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+</style>
+</head>
+<body>
+  <div id="fatal" role="alert" hidden></div>
+  <script>
+  (function () {
+    function show(msg) {
+      var box = document.getElementById('fatal');
+      if (box) { box.hidden = false; box.textContent = msg; }
+    }
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (t && t !== window && (t.src || t.href)) {
+        var url = String(t.src || t.href);
+        if (/fonts\.(googleapis|gstatic)\.com/.test(url)) return;   // fonts are optional
+        var name = url.split('/').slice(-2).join('/');
+        show('Could not load ' + name + '.' + (location.protocol === 'file:'
+          ? ' Browsers block module scripts on pages opened as a file. Use the single-file index.html, or host the page (GitHub Pages).'
+          : ' Upload the js/ and kb/ folders next to index.html, or use the single-file index.html.'));
+      } else if (e.message) {
+        show('Script error: ' + e.message);
+      }
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) {
+      show('Error: ' + ((e.reason && e.reason.message) || e.reason));
+    });
+  })();
+  </script>
+
+  <div class="app">
+    <header class="titlebar">
+      <button id="railToggle" class="rail-toggle" type="button" aria-label="Show tools and notes" aria-expanded="false" aria-controls="rail">
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+      </button>
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <defs><mask id="moonCut"><rect width="24" height="24" fill="#fff"/><circle cx="16.2" cy="9.4" r="7.3" fill="#000"/></mask></defs>
+          <circle class="moon" cx="11.5" cy="12.6" r="9" mask="url(#moonCut)"/>
+        </svg>
+        <span class="wordmark">LuauForge</span>
+      </div>
+      <div class="engine"><span id="pill" class="pill idle">Docs mode</span></div>
+      <div class="actions">
+        <button id="loadBtn" type="button" class="primary" title="Download the free AI model. It is cached after the first time.">Load AI model</button>
+        <button id="checkBtn" type="button" title="Check a Luau script for problems">Check code</button>
+        <button id="brainBtn" type="button" title="Lessons the assistant has learned from you">Lessons</button>
+        <button id="settingsBtn" type="button">Settings</button>
+        <button id="newBtn" type="button">New chat</button>
+      </div>
+    </header>
+
+    <div id="progress" hidden>
+      <div class="track"><div id="bar"></div></div>
+      <div id="progressText"></div>
+    </div>
+
+    <div class="workspace">
+      <nav class="rail" id="rail" aria-label="Tools and notes">
+        <section>
+          <h2>Tools</h2>
+          <div id="modeList" class="modes" role="group" aria-label="What do you want to do"></div>
+        </section>
+        <section>
+          <h2>Notes</h2>
+          <div id="tree" class="tree"></div>
+        </section>
+      </nav>
+
+      <div class="stage">
+        <main id="messages" aria-live="polite"></main>
+        <div id="status" role="alert"></div>
+        <div class="compose">
+          <form id="composer" autocomplete="off">
+            <textarea id="input" rows="1" placeholder="Ask about Luau or Roblox, or paste a script. Shift+Enter adds a line." aria-label="Message"></textarea>
+            <button id="send" type="submit" class="primary">Send</button>
+            <button id="stop" type="button" class="danger" hidden>Stop</button>
+          </form>
+          <p class="hint-line"><span id="modeNote">Mode: Ask anything</span><span>Luau and Roblox only. Test in Studio before you ship.</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="scrim"></div>
+
+  <dialog id="settingsDlg">
+    <form id="settingsForm">
+      <h2>Settings</h2>
+      <p id="gpuInfo" class="hint"></p>
+      <label>AI model size
+        <select id="modelKey"></select>
+      </label>
+      <label>Creativity (0 is most precise)
+        <input id="temperature" type="number" min="0" max="1" step="0.05">
+      </label>
+      <label>Longest answer (tokens)
+        <input id="maxTokens" type="number" min="256" max="2048" step="128">
+      </label>
+      <label class="check"><input id="selfCheck" type="checkbox"><span>Self-check: lint the AI's code and have it fix any problems</span></label>
+      <label class="check"><input id="autoLoad" type="checkbox"><span>Load the AI model automatically after the first time</span></label>
+      <details>
+        <summary>Use your own fine-tuned model</summary>
+        <p class="hint">Point this at a model you converted to MLC format (see the README). Leave empty to use the built-in choice.</p>
+        <label>Model id <input id="customId" type="text" spellcheck="false"></label>
+        <label>Weights URL (a Hugging Face repo, ending in /resolve/main/) <input id="customModel" type="text" spellcheck="false"></label>
+        <label>Model library URL (.wasm) <input id="customLib" type="text" spellcheck="false"></label>
+      </details>
+      <div class="row">
+        <button type="button" id="cancelSettings">Cancel</button>
+        <button type="submit" class="primary">Save settings</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="brainDlg">
+    <h2>Lessons</h2>
+    <p id="memCount" class="hint"></p>
+    <p class="hint">The AI's weights never change. It learns by saving lessons here and recalling the closest one when you ask something similar. Lessons stay in this browser.</p>
+    <label>Question
+      <textarea id="teachQ" rows="2" placeholder="How do I ...?"></textarea>
+    </label>
+    <label>Answer to give next time
+      <textarea id="teachA" rows="6" placeholder="Write the answer. Put code in ```lua blocks."></textarea>
+    </label>
+    <div class="row left"><button type="button" id="teachSave" class="primary">Save lesson</button></div>
+    <ul id="memList" class="mem"></ul>
+    <div class="row">
+      <button type="button" id="exportMem">Export lessons</button>
+      <label class="filebtn">Import lessons<input id="importMem" type="file" accept=".md,.txt" hidden></label>
+      <button type="button" id="clearMem" class="danger">Delete all</button>
+      <button type="button" id="closeBrain">Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="checkDlg">
+    <h2>Check code</h2>
+    <p class="hint">Finds deprecated APIs, unprotected DataStore and HTTP calls, unvalidated remotes, loops that never yield and unbalanced brackets. It is not a full type-check.</p>
+    <textarea id="checkCode" rows="12" spellcheck="false" placeholder="Paste your Luau script here"></textarea>
+    <div id="checkOut" class="checkout"></div>
+    <div class="row">
+      <button type="button" id="runCheck" class="primary">Check</button>
+      <button type="button" id="closeCheck">Close</button>
+    </div>
+  </dialog>
+
+  <script>window.__LUAUFORGE_KB__ = {"kb/community.md": "Community knowledge. Anyone can add entries to this file with a pull request, and every visitor's copy of\nthe app learns them on the next page load. Use the same format as the other files in kb/. The block below is\nindented so that it is documentation and not a real entry:\n\n    @@@ your-entry-id\n    title: A short, searchable title\n    tags: extra search words people might type\n    ---\n    Explain it, then give a small, correct, runnable example in a lua code block.\n\nKeep one topic per entry and test the code in Roblox Studio or luau-analyze first. You can also use the\nBrain panel in the app to export lessons you taught it, which are already in this format. Paste them below.\n\n", "kb/core.md": "@@@ luau-overview\ntitle: What Luau is and how it differs from Lua 5.1\ntags: luau lua language basics differences goto integer\n---\nLuau is Roblox's language, derived from Lua 5.1, with gradual typing, a faster VM and a sandbox.\n- Arrays and strings are 1-indexed. Inequality is `~=`, concatenation is `..`, and `nil` and `false` are the only falsy values.\n- All numbers are 64-bit floats. `//` is floor division and `%` is modulo.\n- Luau adds `continue`, compound assignment (`+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `..=`), string interpolation with backticks, if-expressions, type annotations and generalized iteration.\n- There is no `goto`, and no `load` or `dofile`. `loadstring` exists in Roblox but is disabled by default.\n- Method calls use `:` and pass `self`; `.` does not. Mixing them up is a very common bug.\n\n@@@ new-syntax\ntitle: Modern Luau syntax: continue, interpolation, if-expressions, compound operators\ntags: continue string interpolation backtick if expression compound assignment generalized iteration floor division\n---\n```lua\nlocal name = \"Ada\"\nlocal score = 10\nprint(`{name} scored {score * 2} points`)        -- string interpolation\n\nlocal label = if score > 5 then \"high\" else \"low\"  -- if-expression (no `end`)\n\nscore += 5                                         -- compound assignment\nscore //= 2                                        -- floor division\n\nfor index, value in { \"a\", \"b\", \"c\" } do           -- generalized iteration, no pairs()/ipairs()\n\tif value == \"b\" then\n\t\tcontinue                                   -- skip to next iteration\n\tend\n\tprint(index, value)\nend\n```\nIterating a dictionary also works with `for key, value in dict do`. The order of dictionary keys is not guaranteed.\n\n@@@ type-annotations\ntitle: Type annotations, optionals, unions and function types\ntags: type annotation optional union intersection function type alias export strict\n---\n```lua\n--!strict\nlocal count: number = 0\nlocal name: string? = nil                     -- optional: string or nil\nlocal id: string | number = 5                 -- union\n\ntype Point = { x: number, y: number }         -- record\ntype Names = { string }                       -- array of strings\ntype Scores = { [string]: number }            -- dictionary\ntype Callback = (number, string?) -> boolean  -- function type\ntype Direction = \"Up\" | \"Down\"                -- singleton (literal) union\n\nexport type Item = { id: number, name: string } -- visible to code that requires this module\n\nlocal function distance(a: Point, b: Point): number\n\treturn math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)\nend\n\nlocal function sum(...: number): number        -- variadic\n\tlocal total = 0\n\tfor _, n in { ... } do total += n end\n\treturn total\nend\n```\nUse `typeof(x)` in a type position to reuse the type of a value. Use `x :: T` to cast when you know more than the checker.\n\n@@@ strict-mode\ntitle: --!strict, --!nonstrict and --!nocheck\ntags: strict nonstrict nocheck type checking script analysis directive\n---\nPut one of these on the first line of a script:\n- `--!strict` turns on full type checking. Use it for new code.\n- `--!nonstrict` is the default. Unannotated variables are `any`.\n- `--!nocheck` turns the type checker off for that script.\n\nStrict mode catches typos in property names, nil access, wrong argument types and missing returns before the game runs. Annotate function parameters and return types; locals are usually inferred.\n\n@@@ generics-and-typeof\ntitle: Generic functions and types\ntags: generic generics type parameter T typeof cast map filter\n---\n```lua\n--!strict\nlocal function map<T, U>(list: { T }, fn: (T) -> U): { U }\n\tlocal out: { U } = {}\n\tfor i, v in list do\n\t\tout[i] = fn(v)\n\tend\n\treturn out\nend\n\nlocal lengths = map({ \"a\", \"bb\", \"ccc\" }, function(s: string): number\n\treturn #s\nend)\n\ntype Pair<A, B> = { first: A, second: B }\nlocal p: Pair<string, number> = { first = \"hp\", second = 100 }\n\nlocal function identity<T>(x: T): T\n\treturn x\nend\n```\n\n@@@ type-refinement\ntitle: Type refinement and narrowing (nil checks, type(), typeof, assert)\ntags: refinement narrowing nil check type typeof assert unknown any optional\n---\nThe checker narrows types after tests:\n```lua\n--!strict\nlocal function describe(value: string | number | nil): string\n\tif value == nil then\n\t\treturn \"nothing\"\n\tend\n\tif type(value) == \"string\" then\n\t\treturn value:upper()          -- value is a string here\n\tend\n\treturn tostring(value + 1)        -- value is a number here\nend\n\nlocal function firstChild(parent: Instance): Instance\n\tlocal child = parent:FindFirstChildWhichIsA(\"BasePart\")\n\tassert(child, \"no BasePart found\")   -- narrows `Instance?` to `Instance`\n\treturn child\nend\n```\n`type()` returns Lua type names (\"string\", \"number\", \"table\"...). `typeof()` also knows Roblox types (\"Instance\", \"Vector3\", \"CFrame\", \"RBXScriptConnection\"). Use `unknown` for values you have not validated yet, for example remote event arguments.\n\n@@@ tables-library\ntitle: The table library: create, find, clone, freeze, sort, move\ntags: table create find clone freeze sort insert remove concat unpack move clear array dictionary length\n---\n```lua\nlocal t = table.create(100, 0)             -- 100 zeros, preallocated\ntable.insert(t, 5)                         -- append\ntable.insert(t, 1, 99)                     -- insert at position 1\ntable.remove(t, 1)                         -- remove position 1 (shifts the rest)\nprint(table.find({ \"a\", \"b\" }, \"b\"))       -- 2 (nil if absent)\nlocal copy = table.clone(t)                -- shallow copy\ntable.freeze(copy)                         -- read-only; writing now errors\ntable.clear(t)                             -- empty it, keep the allocation\ntable.sort(list, function(a, b) return a.score > b.score end)\nprint(table.concat({ \"a\", \"b\", \"c\" }, \", \"))\nprint(table.unpack({ 1, 2, 3 }))\n```\nPitfalls:\n- `#t` is only reliable for arrays without holes. For dictionaries it is 0, so count with a loop.\n- Removing items while iterating forward skips elements. Iterate backwards or build a new table.\n- `table.freeze` is shallow; nested tables stay mutable.\n\n@@@ string-library\ntitle: Strings: format, split, find, match, gsub and patterns\ntags: string format split find match gsub gmatch pattern sub upper lower rep trim utf8\n---\n```lua\nlocal s = \"Hello, World\"\nprint(s:sub(1, 5))                       -- \"Hello\"\nprint(s:upper(), s:lower(), #s)\nprint(s:find(\"World\", 1, true))          -- 8 12 (plain find, no pattern)\nprint(string.format(\"%s has %d HP (%.1f%%)\", \"Bob\", 80, 80.0))\nfor _, part in string.split(\"a,b,c\", \",\") do print(part) end\nlocal key, value = (\"speed=16\"):match(\"^(%w+)=(%d+)$\")\nlocal trimmed = (\"  hi  \"):gsub(\"^%s+\", \"\"):gsub(\"%s+$\", \"\")\nfor word in s:gmatch(\"%a+\") do print(word) end\n```\nLua patterns are not regex. Special characters are escaped with `%`, not `\\`, and there is no alternation (`|`). `gsub` returns two values (the string and the count), so wrap it in parentheses if you only want the string. `#s` counts bytes; use `utf8.len(s)` for characters.\n\n@@@ metatables-oop\ntitle: Classes with metatables (OOP) in Luau\ntags: oop class metatable __index setmetatable constructor method self object new\n---\n```lua\n--!strict\nlocal Account = {}\nAccount.__index = Account\n\nexport type Account = typeof(setmetatable({} :: { balance: number }, Account))\n\nfunction Account.new(balance: number): Account\n\treturn setmetatable({ balance = balance }, Account)\nend\n\nfunction Account.deposit(self: Account, amount: number)\n\tself.balance += amount\nend\n\nfunction Account.getBalance(self: Account): number\n\treturn self.balance\nend\n\nreturn Account\n```\nUse it from another script with `local acc = Account.new(100); acc:deposit(50)`. Call methods with `:` so `self` is passed.\nOther metamethods: `__tostring`, `__eq`, `__lt`, `__le`, `__add`, `__sub`, `__mul`, `__div`, `__unm`, `__len`, `__call`, `__concat`, `__newindex`, `__mode`.\n\n@@@ inheritance-oop\ntitle: Inheritance with metatables\ntags: inheritance subclass extend super base class oop override\n---\n```lua\nlocal Animal = {}\nAnimal.__index = Animal\n\nfunction Animal.new(name)\n\tlocal self = setmetatable({}, Animal)\n\tself.Name = name\n\treturn self\nend\n\nfunction Animal:Speak()\n\tprint(self.Name .. \" makes a sound\")\nend\n\nlocal Dog = setmetatable({}, { __index = Animal })   -- Dog falls back to Animal\nDog.__index = Dog\n\nfunction Dog.new(name)\n\tlocal self = Animal.new(name)                    -- run the parent constructor\n\treturn setmetatable(self, Dog)                   -- then switch to the Dog metatable\nend\n\nfunction Dog:Speak()                                  -- override\n\tprint(self.Name .. \" barks\")\nend\n\nDog.new(\"Rex\"):Speak()   -- Rex barks\n```\nPrefer composition (a table holding other objects) over deep inheritance chains; it is easier to type-check.\n\n@@@ closures-varargs\ntitle: Closures, varargs and select\ntags: closure upvalue vararg varargs select pack unpack function return multiple values\n---\n```lua\nlocal function counter()\n\tlocal n = 0\n\treturn function()\n\t\tn += 1                      -- n is an upvalue captured by the closure\n\t\treturn n\n\tend\nend\nlocal c = counter(); print(c(), c())   -- 1 2\n\nlocal function log(...)\n\tlocal count = select(\"#\", ...)       -- number of args, including nils\n\tlocal first = ...\n\tlocal all = table.pack(...)          -- { n = count, ... }\n\tprint(count, first, all.n)\nend\n\nlocal a, b = (function() return 1, 2, 3 end)()   -- extra values are dropped\n```\nWrap a call in parentheses to keep only its first return value. Use `select(\"#\", ...)` rather than `#{...}` when nils may appear.\n\n@@@ error-handling\ntitle: Error handling: pcall, xpcall, error and assert\ntags: pcall xpcall error assert traceback try catch retry exception\n---\n```lua\nlocal ok, result = pcall(function()\n\treturn riskyCall()\nend)\nif not ok then\n\twarn(\"failed:\", result)           -- result is the error message\nend\n\nlocal ok2, trace = xpcall(riskyCall, debug.traceback)   -- keeps the stack trace on failure\n\nerror(\"something broke\")              -- raise an error (string)\nerror({ code = 404 })                 -- error values can be tables\nerror(\"bad argument\", 2)              -- level 2 blames the caller\nassert(typeof(x) == \"number\", \"x must be a number\")\n```\nRetry helper for flaky calls (DataStore, HTTP):\n```lua\nlocal function retry(fn: () -> any, attempts: number): (boolean, any)\n\tlocal ok = false\n\tlocal result: any = nil\n\tfor i = 1, attempts do\n\t\tok, result = pcall(fn)\n\t\tif ok then break end\n\t\ttask.wait(2 ^ i)              -- 2s, 4s, 8s ...\n\tend\n\treturn ok, result\nend\n```\n`pcall` can yield (for example around `task.wait` or `WaitForChild`). An error inside a thread started with `task.spawn` prints a traceback but does not propagate to the code that spawned it.\n\n@@@ coroutines\ntitle: Coroutines versus the task library\ntags: coroutine wrap create resume yield status thread task spawn\n---\nPrefer the `task` library in Roblox. Raw coroutines are still useful for generators:\n```lua\nlocal gen = coroutine.wrap(function()\n\tfor i = 1, 3 do\n\t\tcoroutine.yield(i)\n\tend\nend)\nprint(gen(), gen(), gen())   -- 1 2 3\n```\n- `coroutine.create(fn)` plus `coroutine.resume(co, ...)` runs it manually and returns `true, ...` or `false, err`.\n- `coroutine.status(co)` is \"suspended\", \"running\", \"normal\" or \"dead\". Resuming a dead coroutine returns an error (\"cannot resume dead coroutine\").\n- A coroutine that yields on a Roblox yielding call (`task.wait`, `WaitForChild`) is resumed by the scheduler, so do not `resume` it yourself.\n- `task.spawn(co)` accepts a coroutine as well as a function. `task.cancel(thread)` stops one.\n\n@@@ math-random\ntitle: Math and random numbers\ntags: math clamp lerp round floor ceil random Random seed noise sign abs huge pi sqrt rad deg\n---\n```lua\nprint(math.clamp(15, 0, 10))           -- 10\nprint(math.lerp(0, 100, 0.25))         -- 25\nprint(math.round(2.5), math.floor(2.9), math.ceil(2.1), math.sign(-3))\nprint(math.rad(180), math.deg(math.pi))\nprint(math.huge, -math.huge)\n\nlocal rng = Random.new(os.time())      -- seedable generator object\nprint(rng:NextInteger(1, 6))           -- 1..6 inclusive\nprint(rng:NextNumber())                -- 0..1\nprint(rng:NextUnitVector())            -- random direction\n\nprint(math.random(1, 10))              -- global generator, fine for casual use\nprint(math.noise(x * 0.1, y * 0.1))    -- Perlin noise in roughly -1..1\n```\nCheck for NaN with `x ~= x`. Dividing by zero gives `inf` or `nan`, not an error.\n\n@@@ buffer-library\ntitle: The buffer library for compact binary data\ntags: buffer binary bytes pack serialize network performance create write read\n---\n```lua\nlocal b = buffer.create(8)               -- 8 zeroed bytes\nbuffer.writeu32(b, 0, 12345)             -- unsigned 32-bit at byte offset 0\nbuffer.writef32(b, 4, 1.5)               -- 32-bit float at offset 4\nprint(buffer.readu32(b, 0), buffer.readf32(b, 4))\nlocal s = buffer.tostring(b)             -- raw bytes as a string\nlocal b2 = buffer.fromstring(s)\nprint(buffer.len(b2))\n```\nUse buffers for compact network messages and large numeric arrays. They are far smaller and faster than tables of numbers. Offsets are in bytes and start at 0, unlike tables.\n\n@@@ native-codegen\ntitle: Native code generation (--!native and @native)\ntags: native codegen performance optimize fast numeric loop attribute\n---\nLuau can compile hot functions to machine code. Add `--!native` as the first line to compile the whole script, or put the `@native` attribute on one function:\n```lua\n@native\nlocal function dot(ax: number, ay: number, bx: number, by: number): number\n\treturn ax * bx + ay * by\nend\n```\nIt helps number-crunching loops (math, vectors, buffers). It does little for code dominated by Roblox API calls. Annotate types so the compiler can specialise, and measure before and after with `os.clock()`.\n\n@@@ performance-tips\ntitle: Performance tips for Luau and Roblox scripts\ntags: performance optimize lag fps slow profile microprofiler cache loop instance new parent getchildren\n---\n- Set `.Parent` last when creating instances. Do not use `Instance.new(\"Part\", parent)`, which parents before properties are set and replicates each change.\n- Cache references (`local part = workspace.Part`) instead of calling `FindFirstChild` or `GetService` every frame.\n- Avoid `GetChildren()`, `GetDescendants()` and string building inside per-frame loops.\n- Build strings with `table.concat` rather than `s ..= x` in big loops.\n- Use `table.create(n)` and `table.clear(t)` to avoid reallocations.\n- Prefer events (`Changed`, `Touched`, `ChildAdded`, attribute signals) to polling every frame.\n- Use `workspace:GetPartBoundsInBox`, `GetPartBoundsInRadius` and `OverlapParams` for area queries instead of looping over every part.\n- Profile with `debug.profilebegin(\"label\")` and `debug.profileend()`, then read the MicroProfiler (Ctrl+F6).\n- For heavy math, use `@native`, and for CPU-bound work on many objects consider Parallel Luau (Actors and `task.desynchronize()`).\n\n@@@ memory-leaks\ntitle: Memory leaks: disconnecting events, cleaning tables, weak tables\ntags: memory leak disconnect connection destroy cleanup weak table mode janitor maid\n---\nCommon causes and fixes:\n- Connections to long-lived objects keep their callbacks (and everything those capture) alive. Store the connection and call `:Disconnect()` when finished.\n- Calling `:Destroy()` on an Instance disconnects its own events and removes it from the tree. References you keep in tables still hold the object, so set them to `nil` or remove them.\n- Per-player tables must be cleared in `Players.PlayerRemoving`.\n- Use a weak table when a cache should not keep objects alive:\n```lua\nlocal cache = setmetatable({}, { __mode = \"k\" })   -- weak keys: entries vanish when the key is collected\n```\n- Tag cleanup in one place with a Janitor or Maid object (see the janitor-class note).\n- Use `Instance.Destroying` or `AncestryChanged` to run cleanup when an object goes away.\n\n@@@ deprecated-apis\ntitle: Deprecated Roblox APIs and their modern replacements\ntags: deprecated replacement wait spawn delay tick connect unpack getfenv bodyvelocity raycast loadanimation modern update\n---\nDo not write the old calls in new code. Replacements:\n- `wait(n)` becomes `task.wait(n)`\n- `spawn(fn)` becomes `task.spawn(fn)` or `task.defer(fn)`\n- `delay(t, fn)` becomes `task.delay(t, fn)`\n- `tick()` becomes `os.clock()` (timing), `os.time()` (Unix seconds) or `workspace:GetServerTimeNow()`\n- `event:connect(fn)` becomes `event:Connect(fn)`\n- `workspace:FindPartOnRay(...)` becomes `workspace:Raycast(origin, direction, params)`\n- `Enum.RaycastFilterType.Blacklist/Whitelist` becomes `Exclude/Include`\n- `BodyVelocity`, `BodyPosition`, `BodyGyro`, `BodyForce` become `LinearVelocity`, `AlignPosition`, `AlignOrientation`, `VectorForce`\n- `Humanoid:LoadAnimation` becomes `Animator:LoadAnimation`\n- `model:SetPrimaryPartCFrame(cf)` becomes `model:PivotTo(cf)`\n- `PhysicsService:SetPartCollisionGroup` becomes `part.CollisionGroup = \"Name\"`\n- `unpack` becomes `table.unpack`; `table.getn(t)` becomes `#t`\n- `game.Workspace` becomes `workspace`; `game.Players` becomes `game:GetService(\"Players\")`\n- `getfenv`/`setfenv` have no direct replacement; pass values explicitly\n\n@@@ common-errors\ntitle: Common Roblox script errors and what they mean\ntags: error nil index attempt infinite yield not valid member compare arithmetic call dead coroutine timeout stack trace output\n---\n- **attempt to index nil with 'X'**: the variable on the left is nil. Check spelling, use `WaitForChild` for things that load later, and guard with `if obj then`.\n- **'X' is not a valid member of 'Y'**: the child or property does not exist (wrong name, not replicated yet, or removed). Use `FindFirstChild` or `WaitForChild(\"X\", 5)`.\n- **Infinite yield possible on 'Y:WaitForChild(\"X\")'**: the child never appeared. Wrong name, wrong parent, created only on the server or client, or not streamed in.\n- **attempt to call a nil value**: calling something that does not exist, a typo in a method name, or `.` versus `:` confusion.\n- **attempt to perform arithmetic (add) on nil and number** or **attempt to compare nil with number**: a variable you expected to hold a number is nil. Print it just before the failing line.\n- **Script timeout: exhausted allowed execution time**: a loop with no yield. Add `task.wait()`.\n- **cannot resume dead coroutine**: resuming a coroutine that already finished.\n- **ServerScriptService.X:12: ...**: the number after the colon is the line. Read the traceback from the top, and click the line in the Output window.\n- **HTTP 403 / 429**: forbidden or rate-limited. **DataStore request was added to queue**: you are hitting the request budget.\n\n@@@ tooling\ntitle: Luau tooling: Rojo, Wally, StyLua, Selene, luau-lsp, Lune, Jest\ntags: tooling rojo wally stylua selene luau-lsp lune jest testez aftman rokit vscode git external editor package formatter linter\n---\n- **Rojo** syncs a folder of `.luau` files into Roblox Studio, so you can use Git and VS Code.\n- **Wally** is the package manager (`wally.toml`). **Rokit** or **Aftman** install and pin these tools per project.\n- **StyLua** formats code. **Selene** lints it.\n- **luau-lsp** is the language server for VS Code and other editors: autocomplete and type checking with Roblox types.\n- **luau-analyze** (from the Luau project) is the command-line type checker.\n- **Lune** runs standalone Luau scripts outside Roblox, which is handy for build scripts and tests.\n- **Jest Lua** (successor to TestEZ) runs unit tests in a Roblox place or in Lune.\n- **Open Cloud** is Roblox's HTTP API for DataStores, publishing and more from outside the game.\n", "kb/patterns.md": "@@@ datastore-basics\ntitle: DataStore basics: saving and loading player data safely\ntags: datastore datastoreservice getasync setasync updateasync save load player data persistence pcall retry bindtoclose playerremoving cache leave\n---\n```lua\n--!strict\nlocal DataStoreService = game:GetService(\"DataStoreService\")\nlocal Players = game:GetService(\"Players\")\n\nlocal store = DataStoreService:GetDataStore(\"PlayerData_v1\")\nlocal DEFAULT = { coins = 0, level = 1 }\nlocal cache: { [Player]: { [string]: any } } = {}\n\nlocal function withRetry(fn: () -> any, tries: number): (boolean, any)\n\tlocal ok = false\n\tlocal result: any = nil\n\tfor attempt = 1, tries do\n\t\tok, result = pcall(fn)\n\t\tif ok then break end\n\t\ttask.wait(2 ^ attempt)\n\tend\n\treturn ok, result\nend\n\nlocal function load(player: Player)\n\tlocal key = `Player_{player.UserId}`\n\tlocal ok, data = withRetry(function()\n\t\treturn store:GetAsync(key)\n\tend, 3)\n\tif not ok then\n\t\tplayer:Kick(\"Could not load your data. Please rejoin.\")   -- never continue with default data, it would overwrite the real save\n\t\treturn\n\tend\n\tcache[player] = data or table.clone(DEFAULT)\nend\n\nlocal function save(player: Player)\n\tlocal data = cache[player]\n\tif not data then return end\n\tlocal key = `Player_{player.UserId}`\n\tlocal ok, err = withRetry(function()\n\t\treturn store:UpdateAsync(key, function()\n\t\t\treturn data\n\t\tend)\n\tend, 3)\n\tif not ok then warn(\"save failed for\", player.Name, err) end\nend\n\nPlayers.PlayerAdded:Connect(load)\nPlayers.PlayerRemoving:Connect(function(player)\n\tsave(player)\n\tcache[player] = nil\nend)\n\ngame:BindToClose(function()                       -- server shutdown: save everyone before it closes\n\tlocal pending = 0\n\tfor _, player in Players:GetPlayers() do\n\t\tpending += 1\n\t\ttask.spawn(function()\n\t\t\tsave(player)\n\t\t\tpending -= 1\n\t\tend)\n\tend\n\twhile pending > 0 do task.wait() end\nend)\n```\nRules: always `pcall`; never overwrite data after a failed load; use `UpdateAsync` for read-modify-write; save on leave, on shutdown and on a timer (every few minutes). Studio needs \"Enable Studio Access to API Services\" in Game Settings. A value can be at most 4 MB. For production, consider session locking with ProfileStore or ProfileService so two servers cannot write the same player at once.\n\n@@@ anti-exploit-server-validation\ntitle: Anti-exploit: never trust the client, validate remote events on the server\ntags: exploit exploiter cheat security validate validation remote cooldown rate limit sanity check server authoritative hack damage teleport nan type check distance backdoor\n---\nAn exploiter can fire any RemoteEvent with any arguments at any speed, so the server must check everything.\n```lua\n--!strict\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal Players = game:GetService(\"Players\")\n\nlocal attack = ReplicatedStorage:WaitForChild(\"Attack\") :: RemoteEvent\nlocal lastUse: { [Player]: number } = {}\nlocal COOLDOWN = 0.5\nlocal RANGE = 12\n\nattack.OnServerEvent:Connect(function(player: Player, target: unknown)\n\t-- 1. type check\n\tif typeof(target) ~= \"Instance\" or not target:IsA(\"Model\") then return end\n\t-- 2. rate limit\n\tlocal now = os.clock()\n\tif now - (lastUse[player] or 0) < COOLDOWN then return end\n\tlastUse[player] = now\n\t-- 3. sanity check against server state (position, ownership, alive)\n\tlocal character = player.Character\n\tlocal root = character and character:FindFirstChild(\"HumanoidRootPart\")\n\tlocal targetRoot = target:FindFirstChild(\"HumanoidRootPart\")\n\tif not (root and targetRoot) then return end\n\tif ((root :: BasePart).Position - (targetRoot :: BasePart).Position).Magnitude > RANGE then return end\n\t-- 4. the SERVER decides the damage, never the client\n\tlocal humanoid = target:FindFirstChildOfClass(\"Humanoid\")\n\tif humanoid then humanoid:TakeDamage(10) end\nend)\n\nPlayers.PlayerRemoving:Connect(function(player) lastUse[player] = nil end)\n```\nChecklist:\n- Validate argument types with `typeof`, clamp numbers with `math.clamp`, reject NaN (`n ~= n`) and `math.huge`, and limit string lengths.\n- Never let the client send damage, prices, currency amounts or \"I won\" flags. Send intent (\"use item 3\"), and let the server compute the result.\n- Check distance, cooldowns, ownership, alive state and inventory on the server.\n- Do not put secrets or trusted logic in `ReplicatedStorage` or any client-visible script.\n- Never `require(assetId)` or use `loadstring` on code you did not review. Free models often hide backdoors.\n- Keep client checks only for UX. They are not security.\n\n@@@ module-pattern\ntitle: ModuleScript patterns: services and shared utilities\ntags: module modulescript require service controller utility shared library return table export cyclic dependency structure architecture\n---\nA ModuleScript at `ReplicatedStorage/Shared/MathUtil`:\n```lua\nlocal MathUtil = {}\n\nfunction MathUtil.round(n: number, places: number): number\n\tlocal m = 10 ^ places\n\treturn math.round(n * m) / m\nend\n\nreturn MathUtil\n```\nAny other script can then use it:\n```lua\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal MathUtil = require(ReplicatedStorage.Shared.MathUtil)\nprint(MathUtil.round(3.14159, 2))   -- 3.14\n```\n- A module runs once and its returned value is cached, so every `require` gets the same table. That is how you share state.\n- Avoid circular requires (A requires B requires A). Move shared pieces to a third module or pass dependencies in `init(deps)`.\n- A common layout: `ServerScriptService/Services/*` (one module per feature), a single `Server` Script that requires them and calls `Start()`, and the same for the client in `StarterPlayerScripts`.\n- Put types in a shared module with `export type`.\n\n@@@ signal-class\ntitle: A custom Signal (event) class\ntags: signal event custom bindable connect fire disconnect observer pubsub publish subscribe once wait\n---\n```lua\nlocal Signal = {}\nSignal.__index = Signal\n\nfunction Signal.new()\n\treturn setmetatable({ _handlers = {} }, Signal)\nend\n\nfunction Signal:Connect(fn)\n\tlocal handler = { fn = fn }\n\ttable.insert(self._handlers, handler)\n\treturn {\n\t\tDisconnect = function()\n\t\t\tlocal i = table.find(self._handlers, handler)\n\t\t\tif i then table.remove(self._handlers, i) end\n\t\tend,\n\t}\nend\n\nfunction Signal:Fire(...)\n\tfor _, h in table.clone(self._handlers) do   -- clone: handlers may disconnect while firing\n\t\ttask.spawn(h.fn, ...)\n\tend\nend\n\nreturn Signal\n```\nUnlike `BindableEvent`, this passes tables by reference (BindableEvents copy tables). Use `BindableEvent` for simple cases, and a Signal module when you need to pass objects or avoid cloning costs.\n\n@@@ janitor-class\ntitle: Janitor / Maid: cleaning up connections and instances in one call\ntags: janitor maid trove cleanup connections destroy memory leak disconnect lifecycle dispose\n---\n```lua\nlocal Janitor = {}\nJanitor.__index = Janitor\n\nfunction Janitor.new()\n\treturn setmetatable({ _tasks = {} }, Janitor)\nend\n\nfunction Janitor:Add(item)\n\ttable.insert(self._tasks, item)\n\treturn item\nend\n\nfunction Janitor:Cleanup()\n\tfor _, item in self._tasks do\n\t\tlocal kind = typeof(item)\n\t\tif kind == \"RBXScriptConnection\" then\n\t\t\titem:Disconnect()\n\t\telseif kind == \"Instance\" then\n\t\t\titem:Destroy()\n\t\telseif kind == \"function\" then\n\t\t\titem()\n\t\telseif kind == \"thread\" then\n\t\t\ttask.cancel(item)\n\t\tend\n\tend\n\ttable.clear(self._tasks)\nend\n\nreturn Janitor\n```\nUse one Janitor per object or per round: `janitor:Add(part.Touched:Connect(...))`, then `janitor:Cleanup()` when it ends.\n\n@@@ cooldown-debounce\ntitle: Cooldowns and debounces\ntags: cooldown debounce rate limit spam click tool ability timer lastuse os clock\n---\n```lua\nlocal COOLDOWN = 2\nlocal lastUsed: { [Player]: number } = {}\n\nlocal function tryUse(player: Player): boolean\n\tlocal now = os.clock()\n\tif now - (lastUsed[player] or -math.huge) < COOLDOWN then\n\t\treturn false\n\tend\n\tlastUsed[player] = now\n\treturn true\nend\n```\nTimestamps are better than `task.wait` flags because they cannot get stuck if the thread errors. Clear `lastUsed[player]` in `PlayerRemoving`. For a simple boolean debounce, reset it in a `task.delay`, not with a bare `wait`.\n\n@@@ object-pooling\ntitle: Object pooling for projectiles and effects\ntags: pool pooling reuse clone projectile bullet effect performance gc recycle spawn many objects\n---\n```lua\nlocal Pool = {}\nPool.__index = Pool\n\nfunction Pool.new(template: Instance, size: number)\n\tlocal self = setmetatable({ _template = template, _free = {} }, Pool)\n\tfor _ = 1, size do\n\t\ttable.insert(self._free, template:Clone())\n\tend\n\treturn self\nend\n\nfunction Pool:Get(): Instance\n\treturn table.remove(self._free) or self._template:Clone()\nend\n\nfunction Pool:Release(obj: Instance)\n\tobj.Parent = nil\n\ttable.insert(self._free, obj)\nend\n\nreturn Pool\n```\nReusing objects avoids the cost of cloning and garbage-collecting hundreds of parts per second. Reset properties (position, velocity, transparency) when you `Get`.\n\n@@@ round-loop\ntitle: A simple round-based game loop\ntags: round game loop intermission lobby match state machine timer countdown status winner minigame\n---\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\n\nlocal INTERMISSION = 15\nlocal ROUND_TIME = 120\nlocal MIN_PLAYERS = 2\n\nlocal state = \"Waiting\"\n\nlocal function setState(newState: string)\n\tstate = newState\n\tworkspace:SetAttribute(\"State\", newState)       -- clients read this to update the UI\nend\n\nwhile true do\n\tif #Players:GetPlayers() < MIN_PLAYERS then\n\t\tsetState(\"Waiting\")\n\t\ttask.wait(1)\n\t\tcontinue\n\tend\n\n\tsetState(\"Intermission\")\n\tfor t = INTERMISSION, 1, -1 do\n\t\tworkspace:SetAttribute(\"Timer\", t)\n\t\ttask.wait(1)\n\tend\n\n\tsetState(\"InRound\")\n\tfor t = ROUND_TIME, 1, -1 do\n\t\tworkspace:SetAttribute(\"Timer\", t)\n\t\t-- end early when a win condition is met\n\t\ttask.wait(1)\n\tend\n\n\tsetState(\"Ending\")\n\ttask.wait(5)\nend\n```\nKeep state in one place on the server and broadcast it with attributes or a RemoteEvent. Clean up map objects and per-round connections at the end of each round (see janitor-class).\n", "kb/roblox.md": "@@@ task-library\ntitle: The task library: task.wait, task.spawn, task.defer, task.delay, task.cancel\ntags: task wait spawn defer delay cancel yield thread schedule sleep pause timer deprecated freeze infinite loop\n---\nUse `task.*` instead of the deprecated `wait`, `spawn` and `delay`.\n```lua\nlocal elapsed = task.wait(1)               -- yields about 1 second, returns the real time waited\ntask.wait()                                -- yields one frame\n\ntask.spawn(function() print(\"runs now\") end)   -- starts immediately in a new thread\ntask.defer(function() print(\"later\") end)      -- runs at the end of the current resumption cycle\nlocal handle = task.delay(2, function() print(\"after 2s\") end)\ntask.cancel(handle)                            -- stop a delayed or spawned thread\n\nwhile true do\n\t-- do work\n\ttask.wait(0.5)                         -- always yield inside an endless loop\nend\n```\nA loop without a yield freezes the script and ends with \"Script timeout\". `while task.wait(1) do ... end` is a common compact form. Extra arguments to `task.spawn(fn, ...)` and `task.delay(t, fn, ...)` are passed to the function.\n\n@@@ script-types-and-locations\ntitle: Script, LocalScript and ModuleScript: where code runs and where to put it\ntags: script localscript modulescript server client location serverscriptservice replicatedstorage starterplayerscripts startergui runcontext require\n---\n- **Script** runs on the server. Put it in `ServerScriptService` (or `Workspace`). Server code and secrets stay here.\n- **LocalScript** runs on one player's client. It only runs inside the player's `PlayerGui`, `Backpack`, character, `PlayerScripts` or `ReplicatedFirst`. Put client code in `StarterPlayer > StarterPlayerScripts`, `StarterGui` or `StarterCharacterScripts`.\n- A **Script** with `RunContext = Client` runs on the client from places like `ReplicatedStorage`.\n- **ModuleScript** runs only when `require`d, returns exactly one value, and runs once per side (the server and each client have their own copy).\n- `ServerStorage` and `ServerScriptService` are never sent to clients. Everything in `ReplicatedStorage`, `StarterGui`, `Workspace` and so on can be read by an exploiter, so never store secrets or trusted logic there.\n- Shared modules go in `ReplicatedStorage`; server-only modules in `ServerScriptService` or `ServerStorage`.\n\n@@@ services-getservice\ntitle: Getting services with game:GetService\ntags: getservice service game workspace players replicatedstorage runservice tweenservice\n---\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal RunService = game:GetService(\"RunService\")\nlocal TweenService = game:GetService(\"TweenService\")\n```\nDeclare them as locals at the top of the script. `game:GetService` creates the service if needed, while `game.TweenService` can error with \"not a valid member of DataModel\". `workspace` is a global, so use it directly instead of `game.Workspace`.\n\n@@@ players-characters\ntitle: Players, PlayerAdded, CharacterAdded and handling players already in the game\ntags: players playeradded playerremoving characteradded character humanoid respawn localplayer getplayerfromcharacter join leave spawn\n---\n```lua\nlocal Players = game:GetService(\"Players\")\n\nlocal function onPlayerAdded(player: Player)\n\tlocal function onCharacterAdded(character: Model)\n\t\tlocal humanoid = character:WaitForChild(\"Humanoid\") :: Humanoid\n\t\thumanoid.Died:Connect(function()\n\t\t\tprint(player.Name .. \" died\")\n\t\tend)\n\tend\n\n\tif player.Character then\n\t\ttask.spawn(onCharacterAdded, player.Character)   -- character may already exist\n\tend\n\tplayer.CharacterAdded:Connect(onCharacterAdded)\nend\n\nPlayers.PlayerAdded:Connect(onPlayerAdded)\nfor _, player in Players:GetPlayers() do               -- players who joined before this script ran\n\ttask.spawn(onPlayerAdded, player)\nend\n\nPlayers.PlayerRemoving:Connect(function(player)\n\t-- save data and clear per-player tables here\nend)\n```\n- `Players.LocalPlayer` exists only in LocalScripts.\n- `Players:GetPlayerFromCharacter(model)` converts a character to a Player (nil for NPCs).\n- Characters are rebuilt on every respawn, so reconnect events in `CharacterAdded`.\n\n@@@ remote-events\ntitle: RemoteEvents: client to server and server to client\ntags: remoteevent remote fireserver fireclient fireallclients onserverevent onclientevent replicate network communicate arguments table\n---\n```lua\n-- Create a RemoteEvent named \"Attack\" in ReplicatedStorage.\n\n-- LocalScript (client -> server)\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal attack = ReplicatedStorage:WaitForChild(\"Attack\") :: RemoteEvent\nattack:FireServer(targetModel)\n\n-- Script (server)\nattack.OnServerEvent:Connect(function(player: Player, target: unknown)\n\t-- the FIRST argument is always the Player who fired it; client args follow\nend)\n\n-- server -> one client / all clients\nattack:FireClient(somePlayer, \"hello\")\nattack:FireAllClients(\"hello\")\n\n-- client receives\nattack.OnClientEvent:Connect(function(message)\n\tprint(message)\nend)\n```\nWhat can be sent: numbers, strings, booleans, Roblox types, Instances that exist for the receiver, and tables of those. What does not survive: functions, metatables, tables with mixed or non-string keys, and Instances the client cannot see (they arrive as nil). Always validate every argument on the server (see anti-exploit-server-validation).\n\n@@@ remote-functions\ntitle: RemoteFunctions: request and response\ntags: remotefunction invokeserver invokeclient onserverinvoke return value callback yield request response\n---\n```lua\n-- Script (server): only ONE callback can be assigned\ngetCoins.OnServerInvoke = function(player: Player)\n\treturn coinsByPlayer[player] or 0\nend\n\n-- LocalScript: yields until the server returns\nlocal coins = getCoins:InvokeServer()\n```\nAvoid `InvokeClient`: if the client errors, leaves or never returns, the server thread hangs forever. Use a `RemoteEvent` pair for server-to-client requests. A client-to-server `InvokeServer` is fine if the server handler validates its inputs and cannot yield indefinitely.\n\n@@@ runservice-loops\ntitle: RunService: Heartbeat, Stepped, RenderStepped and per-frame loops\ntags: runservice heartbeat stepped renderstepped prerender presimulation postsimulation bindtorenderstep deltatime frame loop update every frame isserver isclient isstudio\n---\n```lua\nlocal RunService = game:GetService(\"RunService\")\n\nlocal connection = RunService.Heartbeat:Connect(function(deltaTime: number)\n\tpart.CFrame *= CFrame.Angles(0, math.rad(90) * deltaTime, 0)   -- frame-rate independent\nend)\n-- connection:Disconnect() when done\n```\n- `Heartbeat` fires every frame after physics, on server and client. Use it for most logic.\n- `Stepped` (`PreSimulation`) fires before physics.\n- `RenderStepped` (now also `PreRender`) fires before each frame is drawn and exists only on the client. Use it for cameras and visuals, and keep the work small.\n- `RunService:BindToRenderStep(name, priority, fn)` runs a function at a chosen priority. Cameras use `Enum.RenderPriority.Camera.Value + 1`. Remove it with `UnbindFromRenderStep(name)`.\n- Always multiply movement by `deltaTime`, or it will run faster on high-FPS machines.\n- `RunService:IsServer()`, `IsClient()` and `IsStudio()` tell you where the code runs.\n\n@@@ user-input\ntitle: User input: UserInputService and ContextActionService\ntags: userinputservice contextactionservice input key keyboard mouse touch gamepad inputbegan inputended keycode gameprocessed bindaction mobile button click\n---\n```lua\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nUserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)\n\tif gameProcessed then return end               -- ignore typing in chat or clicks on UI\n\tif input.KeyCode == Enum.KeyCode.E then\n\t\tprint(\"E pressed\")\n\telseif input.UserInputType == Enum.UserInputType.MouseButton1 then\n\t\tprint(\"click\")\n\tend\nend)\n\nprint(UserInputService:IsKeyDown(Enum.KeyCode.LeftShift))\n```\n`ContextActionService` gives you rebindable actions and an optional on-screen touch button:\n```lua\nlocal ContextActionService = game:GetService(\"ContextActionService\")\n\nContextActionService:BindAction(\"Sprint\", function(actionName, state, input)\n\tif state == Enum.UserInputState.Begin then\n\t\tprint(\"start sprint\")\n\tend\n\treturn Enum.ContextActionResult.Sink           -- Pass lets other handlers see it too\nend, true, Enum.KeyCode.LeftShift)                 -- `true` creates a mobile button\n```\nInput only exists on the client, so these belong in a LocalScript. Tell the server with a RemoteEvent and validate there.\n\n@@@ raycasting\ntitle: Raycasting with workspace:Raycast and RaycastParams\ntags: raycast ray raycastparams filter exclude include hit result instance position normal line of sight detect shoot gun direction findpartonray\n---\n```lua\nlocal params = RaycastParams.new()\nparams.FilterType = Enum.RaycastFilterType.Exclude\nparams.FilterDescendantsInstances = { character }      -- ignore the shooter\nparams.IgnoreWater = true\n\nlocal origin = head.Position\nlocal direction = (target - origin).Unit * 100          -- direction AND length, in studs\n\nlocal result = workspace:Raycast(origin, direction, params)\nif result then\n\tprint(result.Instance, result.Position, result.Normal, result.Material, result.Distance)\nelse\n\tprint(\"nothing hit\")\nend\n```\n- The second argument is a displacement vector, not a unit direction. A unit vector only travels 1 stud.\n- `Raycast` returns nil when nothing is hit, so always check the result.\n- Use `Enum.RaycastFilterType.Include` to hit only the listed instances. `Blacklist` and `Whitelist` are deprecated.\n- Set `params.CollisionGroup` and `RespectCanCollide` to control what counts as solid.\n- For thick shapes use `workspace:Blockcast` or `Spherecast`.\n\n@@@ tweenservice\ntitle: TweenService: animate properties smoothly\ntags: tween tweenservice tweeninfo easing animate smooth move fade transparency position size color completed play\n---\n```lua\nlocal TweenService = game:GetService(\"TweenService\")\n\nlocal info = TweenInfo.new(\n\t1,                           -- time in seconds\n\tEnum.EasingStyle.Quad,\n\tEnum.EasingDirection.Out,\n\t0,                           -- repeat count (-1 = forever)\n\tfalse,                       -- reverses\n\t0                            -- delay\n)\n\nlocal tween = TweenService:Create(part, info, {\n\tPosition = Vector3.new(0, 10, 0),\n\tTransparency = 0.5,\n})\ntween:Play()\ntween.Completed:Wait()           -- yields until done\n```\n`tween:Cancel()` stops it, `tween:Pause()` pauses it. Tween on the client for UI and visuals (smoother), and on the server only when the result must replicate to everyone. You cannot tween properties that are not numbers, colors, vectors, CFrames or UDims (booleans and strings cannot be tweened).\n\n@@@ collectionservice-tags\ntitle: CollectionService tags: apply behavior to many instances\ntags: collectionservice tag tagged addtag hastag getinstanceaddedsignal getinstanceremovedsignal many parts doors behavior component\n---\nTag objects in Studio (Tag Editor) or in code, then run one script for every tagged object:\n```lua\nlocal CollectionService = game:GetService(\"CollectionService\")\n\nlocal function setup(instance: Instance)\n\tprint(\"door ready:\", instance:GetFullName())\nend\nlocal function cleanup(instance: Instance)\n\tprint(\"door removed\")\nend\n\nfor _, instance in CollectionService:GetTagged(\"Door\") do\n\ttask.spawn(setup, instance)                               -- ones that already exist\nend\nCollectionService:GetInstanceAddedSignal(\"Door\"):Connect(setup)       -- ones added later\nCollectionService:GetInstanceRemovedSignal(\"Door\"):Connect(cleanup)\n\npart:AddTag(\"Door\")              -- Instance methods: AddTag, HasTag, RemoveTag, GetTags\n```\nThis replaces copy-pasting the same script into hundreds of parts.\n\n@@@ attributes\ntitle: Attributes: custom properties on instances\ntags: attribute setattribute getattribute getattributechangedsignal custom property data configuration value\n---\n```lua\npart:SetAttribute(\"Health\", 100)\nprint(part:GetAttribute(\"Health\"))                   -- 100 (nil if not set)\npart:GetAttributeChangedSignal(\"Health\"):Connect(function()\n\tprint(\"health is now\", part:GetAttribute(\"Health\"))\nend)\n```\nSupported types: string, boolean, number, UDim, UDim2, BrickColor, Color3, Vector2, Vector3, CFrame, NumberSequence, ColorSequence, NumberRange, Rect and Font. Attributes set on the server replicate to clients, so they are good for read-only state such as a player's role or a door's state. They are not secure storage, and clients can change attributes they own locally without the server seeing it.\n\n@@@ cframe-vector-math\ntitle: CFrame and Vector3 math: position, rotation, lookAt, PivotTo\ntags: cframe vector3 angles lookat pivotto lerp magnitude unit dot cross rotate position direction distance toobjectspace inverse orientation\n---\n```lua\nlocal a = Vector3.new(0, 0, 0)\nlocal b = Vector3.new(10, 0, 0)\nprint((b - a).Magnitude)                 -- distance\nprint((b - a).Unit)                      -- direction of length 1\nprint(a:Lerp(b, 0.5), a:Dot(b), a:Cross(b))\nprint(Vector3.zero, Vector3.one, Vector3.yAxis)\n\nlocal cf = CFrame.new(0, 5, 0)\ncf *= CFrame.Angles(0, math.rad(90), 0)  -- rotate 90 degrees (angles are radians)\ncf *= CFrame.new(0, 0, -5)               -- move 5 studs forward in the part's own space\npart.CFrame = CFrame.lookAt(part.Position, target.Position)   -- face a target\nmodel:PivotTo(CFrame.new(0, 10, 0))      -- move any Model or part (replaces SetPrimaryPartCFrame)\nlocal halfway = cf:Lerp(otherCf, 0.5)\nlocal local_ = cf:ToObjectSpace(otherCf) -- otherCf relative to cf\n```\nCFrame multiplication is not commutative: `cf * offset` applies the offset in cf's own space, while `offset * cf` does not. Do not multiply a CFrame by a Vector3 on the left. Use `cf * Vector3.new(...)` (point to world) or `cf:PointToWorldSpace(v)`.\n\n@@@ humanoid\ntitle: Humanoid: health, walk speed, jumping, damage and death\ntags: humanoid health walkspeed jumppower jumpheight takedamage died maxhealth state changestate sit move moveto forcefield kill\n---\n```lua\nlocal humanoid = character:WaitForChild(\"Humanoid\") :: Humanoid\nhumanoid.WalkSpeed = 24\nhumanoid.JumpHeight = 7.2           -- or JumpPower when UseJumpPower is true\nhumanoid.MaxHealth = 150\nhumanoid.Health = humanoid.MaxHealth\nhumanoid:TakeDamage(10)             -- respects ForceField; setting Health directly does not\nhumanoid.Health = 0                 -- kills the character\nhumanoid.Died:Connect(function() end)\nhumanoid.HealthChanged:Connect(function(health) end)\nhumanoid:MoveTo(Vector3.new(0, 0, 50))\nhumanoid:ChangeState(Enum.HumanoidStateType.Jumping)\n```\nWhether `JumpPower` or `JumpHeight` applies depends on `Humanoid.UseJumpPower` (set by `StarterPlayer.CharacterUseJumpPower`). Change WalkSpeed on the server for anything that matters; the client owns its character's physics, so client-side speed changes are not authoritative.\n\n@@@ animation\ntitle: Playing animations with Animator\ntags: animation animator loadanimation animationtrack play stop priority looped marker speed rbxassetid humanoid\n---\n```lua\nlocal humanoid = character:WaitForChild(\"Humanoid\") :: Humanoid\nlocal animator = humanoid:WaitForChild(\"Animator\") :: Animator\n\nlocal animation = Instance.new(\"Animation\")\nanimation.AnimationId = \"rbxassetid://123456789\"        -- replace with your asset id\n\nlocal track = animator:LoadAnimation(animation)\ntrack.Priority = Enum.AnimationPriority.Action\ntrack.Looped = false\ntrack:Play()\ntrack:AdjustSpeed(1.5)\ntrack.Stopped:Wait()\ntrack:GetMarkerReachedSignal(\"Hit\"):Connect(function() print(\"hit frame\") end)\n```\n- Use `Animator:LoadAnimation`. `Humanoid:LoadAnimation` is deprecated.\n- Load and play player animations from a LocalScript so they are smooth. They replicate to everyone.\n- The animation asset must be owned by whoever owns the experience (the user or the group), or it will not play.\n- Load each animation once and reuse the track instead of loading it on every use.\n\n@@@ pathfinding\ntitle: PathfindingService: making NPCs walk around obstacles\ntags: pathfinding pathfindingservice path computeasync waypoints npc ai moveto navigation obstacle jump agent\n---\n```lua\nlocal PathfindingService = game:GetService(\"PathfindingService\")\n\nlocal function walkTo(humanoid: Humanoid, root: BasePart, goal: Vector3): boolean\n\tlocal path = PathfindingService:CreatePath({\n\t\tAgentRadius = 2,\n\t\tAgentHeight = 5,\n\t\tAgentCanJump = true,\n\t})\n\tlocal ok = pcall(function()\n\t\tpath:ComputeAsync(root.Position, goal)\n\tend)\n\tif not ok or path.Status ~= Enum.PathStatus.Success then\n\t\treturn false\n\tend\n\tfor _, waypoint in path:GetWaypoints() do\n\t\tif waypoint.Action == Enum.PathWaypointAction.Jump then\n\t\t\thumanoid.Jump = true\n\t\tend\n\t\thumanoid:MoveTo(waypoint.Position)\n\t\tif not humanoid.MoveToFinished:Wait() then   -- false means it timed out (about 8 seconds)\n\t\t\treturn false\n\t\tend\n\tend\n\treturn true\nend\n```\nRecompute the path when the goal moves or when `path.Blocked` fires. For many NPCs, throttle computations. Set `part.PathfindingModifier` or `CanCollide`/`CanQuery` to shape what is walkable.\n\n@@@ physics-constraints\ntitle: Physics movers: LinearVelocity, AlignPosition, VectorForce and network ownership\ntags: physics bodyvelocity bodyposition bodygyro linearvelocity alignposition alignorientation vectorforce attachment constraint network ownership setnetworkowner velocity force move\n---\nBody movers are deprecated. Use constraints with an `Attachment`:\n```lua\nlocal attachment = Instance.new(\"Attachment\")\nattachment.Parent = part\n\nlocal lv = Instance.new(\"LinearVelocity\")\nlv.Attachment0 = attachment\nlv.MaxForce = math.huge\nlv.VectorVelocity = Vector3.new(0, 0, -20)\nlv.Parent = part\n```\n- `AlignPosition` moves a part to a point, `AlignOrientation` rotates it, `VectorForce` applies a force and `Torque` applies a twist.\n- Unanchored parts are simulated by a nearby player (network ownership). On the server, `part:SetNetworkOwner(nil)` keeps a part under server control. This prevents exploiters moving it, at the cost of latency for the player. Anchored parts cannot have an owner.\n- Set CFrame or Position on anchored parts only. Setting them each frame on unanchored parts fights the physics engine.\n\n@@@ collision-groups\ntitle: Collision groups (players not colliding, custom layers)\ntags: collision group collisiongroup physicsservice registercollisiongroup collidable noclip players pass through\n---\n```lua\nlocal PhysicsService = game:GetService(\"PhysicsService\")\n\nPhysicsService:RegisterCollisionGroup(\"Players\")\nPhysicsService:CollisionGroupSetCollidable(\"Players\", \"Players\", false)   -- players pass through each other\n\nlocal function apply(character: Model)\n\tfor _, part in character:GetDescendants() do\n\t\tif part:IsA(\"BasePart\") then\n\t\t\tpart.CollisionGroup = \"Players\"\n\t\tend\n\tend\nend\n```\nRegister the group once on the server. Set `part.CollisionGroup` (a string) on each part. `SetPartCollisionGroup` is the old, deprecated way. Parts added later (accessories, tools) need the group too. Listen to `character.DescendantAdded`.\n\n@@@ ui-layout\ntitle: UI layout: UDim2, scale vs offset, layout objects and responsive design\ntags: ui gui screengui frame textlabel textbutton udim2 scale offset anchorpoint uilistlayout uigridlayout uipadding uicorner aspectratio responsive mobile resetonspawn layout\n---\n```lua\nlocal frame = Instance.new(\"Frame\")\nframe.AnchorPoint = Vector2.new(0.5, 0.5)\nframe.Position = UDim2.fromScale(0.5, 0.5)       -- centre of the parent\nframe.Size = UDim2.fromScale(0.3, 0.2)           -- 30% x 20% of the parent\nframe.BackgroundColor3 = Color3.fromRGB(30, 30, 30)\n\nlocal corner = Instance.new(\"UICorner\")\ncorner.CornerRadius = UDim.new(0, 8)\ncorner.Parent = frame\n\nlocal list = Instance.new(\"UIListLayout\")\nlist.Padding = UDim.new(0, 6)\nlist.SortOrder = Enum.SortOrder.LayoutOrder\nlist.Parent = frame\n\nframe.Parent = playerGui:WaitForChild(\"MainGui\")\n```\n- `UDim2.new(scaleX, offsetX, scaleY, offsetY)`. Scale is a fraction of the parent, offset is pixels.\n- Use scale plus `UIAspectRatioConstraint`, `UISizeConstraint` and `UITextSizeConstraint` so UI works on phones and large monitors.\n- Layout objects: `UIListLayout`, `UIGridLayout`, `UIPadding`, `UIScale`. `AutomaticSize` lets frames grow to fit contents.\n- A `ScreenGui` is cloned into `PlayerGui` on every respawn unless `ResetOnSpawn = false`. Set it to false to keep UI state across deaths.\n- UI scripts belong in LocalScripts. The server cannot see another player's PlayerGui contents.\n\n@@@ proximity-prompt-and-touched\ntitle: ProximityPrompt and the Touched event (with debounce)\ntags: proximityprompt triggered touched debounce hit part touch interact press e door pickup collect\n---\n```lua\n-- ProximityPrompt (preferred for interaction): works on keyboard, gamepad and touch\nprompt.ActionText = \"Open\"\nprompt.HoldDuration = 0.5\nprompt.MaxActivationDistance = 8\nprompt.Triggered:Connect(function(player: Player)\n\tprint(player.Name .. \" used the prompt\")\nend)\n\n-- Touched fires many times per second, so debounce it\nlocal touching: { [Player]: boolean } = {}\npart.Touched:Connect(function(hit: BasePart)\n\tlocal player = Players:GetPlayerFromCharacter(hit.Parent)\n\tif not player or touching[player] then return end\n\ttouching[player] = true\n\t-- do the effect once\n\ttask.delay(1, function() touching[player] = nil end)\nend)\n```\n`Touched` only fires for parts that are moving or have `CanTouch` enabled, and it can fire for any body part. For reliable zones use `workspace:GetPartBoundsInBox` with `OverlapParams` on a timer, or a zone module.\n\n@@@ sound\ntitle: Playing sounds\ntags: sound soundservice playlocalsound audio music play stop volume looped preload contentprovider\n---\n```lua\nlocal SoundService = game:GetService(\"SoundService\")\nlocal ContentProvider = game:GetService(\"ContentProvider\")\n\nlocal sound = Instance.new(\"Sound\")\nsound.SoundId = \"rbxassetid://123456789\"\nsound.Volume = 0.5\nsound.Looped = false\nsound.Parent = workspace            -- or a part, for positional audio\n\nContentProvider:PreloadAsync({ sound })   -- optional: avoid a delay on first play\nsound:Play()\nsound.Ended:Wait()\nsound:Destroy()\n\nSoundService:PlayLocalSound(sound)  -- client only: plays for that player, not positional\n```\nSounds inside a Part are 3D (they get quieter with distance). Sounds in `SoundService` or parented to `workspace` directly play non-positionally. Play UI sounds on the client.\n\n@@@ camera\ntitle: Camera control and custom cameras\ntags: camera currentcamera scriptable cameratype cframe fieldofview lookat cutscene follow bindtorenderstep first person\n---\n```lua\nlocal RunService = game:GetService(\"RunService\")\nlocal camera = workspace.CurrentCamera\n\ncamera.CameraType = Enum.CameraType.Scriptable\nRunService:BindToRenderStep(\"CutsceneCam\", Enum.RenderPriority.Camera.Value + 1, function(dt)\n\tcamera.CFrame = CFrame.lookAt(Vector3.new(0, 20, 30), target.Position)\nend)\n\n-- Restore the default camera\nRunService:UnbindFromRenderStep(\"CutsceneCam\")\ncamera.CameraType = Enum.CameraType.Custom\ncamera.CameraSubject = humanoid\n\ncamera.FieldOfView = 90\n```\nCamera code is client-only (LocalScript). Tween `camera.CFrame` with TweenService for smooth cutscenes.\n\n@@@ streaming-enabled\ntitle: StreamingEnabled: why parts are missing on the client\ntags: streaming streamingenabled streamed missing nil client replication persistent model streaming mode waitforchild infinite yield\n---\nWith `Workspace.StreamingEnabled` on, the client only receives parts near the player. The server always sees everything.\n- On the client, never assume a part exists. Use `WaitForChild` with a timeout, `FindFirstChild`, or `model.PrimaryPart` checks.\n- Set a model's `ModelStreamingMode` to `Persistent` if it must always exist on clients (important gameplay objects).\n- `Instance.StreamingEnabled` changes mean \"infinite yield\" warnings for far away objects. Wait on events like `ChildAdded` or `CollectionService` instance-added signals instead of failing.\n- Raycasts and region queries on the client only see streamed-in parts. Do authoritative checks on the server.\n\n@@@ text-filtering\ntitle: Filtering user text (required by Roblox rules)\ntags: text filter filtering textservice filterstringasync chat moderation user generated name label pet sign message compliance\n---\nAny text a player types and that other players can see must be filtered on the server.\n```lua\nlocal TextService = game:GetService(\"TextService\")\n\nlocal function filterFor(text: string, from: Player, to: Player): string\n\tlocal ok, result = pcall(function()\n\t\tlocal filtered = TextService:FilterStringAsync(text, from.UserId)\n\t\treturn filtered:GetChatForUserAsync(to.UserId)\n\tend)\n\treturn if ok then result else \"\"      -- show nothing when filtering fails\nend\n```\nUse `GetNonChatStringForBroadcastAsync()` for text shown to everyone (signs, pet names). Never display unfiltered text, and never filter on the client only.\n\n@@@ marketplace-processreceipt\ntitle: Developer products: MarketplaceService.ProcessReceipt\ntags: marketplace marketplaceservice processreceipt developer product purchase robux receipt gamepass promptproductpurchase usergamepass\n---\n```lua\nlocal MarketplaceService = game:GetService(\"MarketplaceService\")\nlocal Players = game:GetService(\"Players\")\n\nMarketplaceService.ProcessReceipt = function(receiptInfo)\n\tlocal player = Players:GetPlayerByUserId(receiptInfo.PlayerId)\n\tif not player then\n\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet     -- Roblox will retry later\n\tend\n\t-- 1. skip if receiptInfo.PurchaseId was already granted (store processed ids in your DataStore)\n\t-- 2. grant the item and save it\n\treturn Enum.ProductPurchaseDecision.PurchaseGranted        -- only after the grant is safely saved\nend\n```\nAssign `ProcessReceipt` exactly once, on the server. Return `NotProcessedYet` on any failure so the purchase is retried. For gamepasses use `MarketplaceService:UserOwnsGamePassAsync(userId, passId)` inside a `pcall`, and `PromptGamePassPurchase` on the client.\n\n@@@ http-service\ntitle: HttpService: JSON and web requests\ntags: httpservice http json jsonencode jsondecode requestasync web request api webhook generateguid fetch get post\n---\n```lua\nlocal HttpService = game:GetService(\"HttpService\")\n\nlocal json = HttpService:JSONEncode({ name = \"Ada\", score = 10 })\nlocal data = HttpService:JSONDecode(json)\n\nlocal ok, response = pcall(function()\n\treturn HttpService:RequestAsync({\n\t\tUrl = \"https://example.com/api\",\n\t\tMethod = \"POST\",\n\t\tHeaders = { [\"Content-Type\"] = \"application/json\" },\n\t\tBody = json,\n\t})\nend)\nif ok and response.Success then\n\tprint(response.StatusCode, response.Body)\nend\n\nprint(HttpService:GenerateGUID(false))    -- unique id string without braces\n```\nEnable it first: Game Settings, Security, Allow HTTP Requests. It is server-only, cannot call `roblox.com` endpoints, and is rate limited (about 500 requests per minute). Always wrap calls in `pcall`. Never put API keys in client-visible places.\n\n@@@ debris-and-cleanup\ntitle: Destroying instances and Debris\ntags: destroy debris additem cleanup remove parent nil temporary projectile effect lifetime\n---\n```lua\nlocal Debris = game:GetService(\"Debris\")\nDebris:AddItem(part, 5)               -- destroy after 5 seconds\n\ntask.delay(5, function()              -- equivalent, and cancellable\n\tif part then part:Destroy() end\nend)\n\npart:Destroy()                        -- removes it, disconnects its events, locks its Parent\n```\nUse `:Destroy()`, not `.Parent = nil`, so the object and its connections can be collected. A destroyed instance cannot be reparented. Check `part.Parent` before using something that may have been destroyed during a yield.\n\n@@@ leaderstats\ntitle: Leaderstats (the leaderboard)\ntags: leaderstats leaderboard intvalue folder coins score points stat player list\n---\n```lua\nlocal Players = game:GetService(\"Players\")\n\nPlayers.PlayerAdded:Connect(function(player: Player)\n\tlocal leaderstats = Instance.new(\"Folder\")\n\tleaderstats.Name = \"leaderstats\"           -- the exact lowercase name Roblox looks for\n\n\tlocal coins = Instance.new(\"IntValue\")\n\tcoins.Name = \"Coins\"\n\tcoins.Value = 0\n\tcoins.Parent = leaderstats\n\n\tleaderstats.Parent = player                -- parent last so the UI sees the finished folder\nend)\n```\nChange values on the server only (`player.leaderstats.Coins.Value += 10`), since client changes do not replicate. `IntValue`, `NumberValue` and `StringValue` appear on the leaderboard. Load the starting numbers from your DataStore (see datastore-basics).\n"};</script>
+<script>
+'use strict';
+const __m_md = (() => {
+// Markdown renderer (escapes everything first) with a small Luau syntax highlighter.
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const KW = new Set(
+  'and break do else elseif end false for function if in local nil not or repeat return then true until while continue export'.split(' ')
+);
+const BUILTIN = new Set(
+  ('game workspace script task math string table os coroutine buffer bit32 utf8 debug Instance Enum Vector2 Vector3 CFrame Color3 ' +
+    'UDim UDim2 TweenInfo Random Ray Region3 BrickColor NumberRange NumberSequence ColorSequence Rect Axes Faces DateTime ' +
+    'RaycastParams OverlapParams CatalogSearchParams print warn error assert pcall xpcall pairs ipairs next select tostring tonumber ' +
+    'type typeof require setmetatable getmetatable rawget rawset rawequal rawlen unpack self shared plugin').split(' ')
+);
+
+const TOKEN =
+  /(--\[(=*)\[[\s\S]*?\]\2\]|--[^\n]*)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|\[(=*)\[[\s\S]*?\]\4\])|(0[xX][0-9a-fA-F_]+|\b\d[\d_]*\.?\d*(?:[eE][+-]?\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+
+function wrap(cls, text) {
+  return text
+    .split('\n')
+    .map((seg) => (seg ? `<span class="${cls}">${esc(seg)}</span>` : ''))
+    .join('\n');
+}
+
+function highlightLua(code) {
+  let out = '';
+  TOKEN.lastIndex = 0;
+  let m;
+  while ((m = TOKEN.exec(code))) {
+    if (m[1] !== undefined) out += wrap('tk-c', m[1]);
+    else if (m[3] !== undefined) out += wrap('tk-s', m[3]);
+    else if (m[5] !== undefined) out += wrap('tk-n', m[5]);
+    else if (m[6] !== undefined) {
+      const w = m[6];
+      if (KW.has(w)) out += '<span class="tk-k">' + w + '</span>';
+      else if (BUILTIN.has(w)) out += '<span class="tk-b">' + w + '</span>';
+      else out += w;
+    } else out += esc(m[7]);
+  }
+  return out;
+}
+
+function inlineMD(s) {
+  return esc(s)
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,:;!?]|$)/g, '$1<em>$2</em>');
+}
+
+function renderText(t) {
+  let out = '';
+  let list = null;
+  let para = [];
+  const flushPara = () => {
+    if (para.length) {
+      out += '<p>' + inlineMD(para.join(' ')) + '</p>';
+      para = [];
+    }
+  };
+  const closeList = () => {
+    if (list) {
+      out += '</' + list + '>';
+      list = null;
+    }
+  };
+  for (const raw of t.split('\n')) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) {
+      flushPara();
+      closeList();
+      continue;
+    }
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) {
+      flushPara();
+      closeList();
+      const n = m[1].length + 1;
+      out += '<h' + n + '>' + inlineMD(m[2]) + '</h' + n + '>';
+      continue;
+    }
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+      flushPara();
+      if (list !== 'ul') {
+        closeList();
+        out += '<ul>';
+        list = 'ul';
+      }
+      out += '<li>' + inlineMD(m[1]) + '</li>';
+      continue;
+    }
+    if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
+      flushPara();
+      if (list !== 'ol') {
+        closeList();
+        out += '<ol>';
+        list = 'ol';
+      }
+      out += '<li>' + inlineMD(m[1]) + '</li>';
+      continue;
+    }
+    closeList();
+    para.push(line.trim());
+  }
+  flushPara();
+  closeList();
+  return out;
+}
+
+const isLuaLang = (lang) => !lang || /^(lua|luau)$/i.test(lang);
+
+function renderMD(text) {
+  return text
+    .split('```')
+    .map((seg, i) => {
+      if (i % 2 === 0) return renderText(seg);
+      const nl = seg.indexOf('\n');
+      const lang = (nl >= 0 ? seg.slice(0, nl) : seg).trim();
+      const code = (nl >= 0 ? seg.slice(nl + 1) : '').replace(/\n$/, '');
+      const lua = isLuaLang(lang);
+      const html = (lua ? highlightLua(code) : esc(code))
+        .split('\n')
+        .map((l) => `<span class="l">${l}</span>`)
+        .join('');
+      return (
+        `<div class="code" data-lang="${lua ? 'lua' : esc(lang.toLowerCase())}">` +
+        `<div class="code-head"><span>${lua ? 'Luau' : esc(lang || 'text')}</span><button class="copy" type="button">Copy</button></div>` +
+        `<pre><code>${html}</code></pre></div>`
+      );
+    })
+    .join('');
+}
+
+function extractCode(md) {
+  const out = [];
+  const re = /```([A-Za-z0-9_+-]*)[^\n]*\n([\s\S]*?)```/g;
+  let m;
+  while ((m = re.exec(md))) out.push({ lang: m[1], code: m[2] });
+  return out;
+}
+
+return { esc, highlightLua, inlineMD, isLuaLang, renderMD, extractCode };
+})();
+
+const __m_lint = (() => {
+// A small, fast Luau checker that runs in the browser. It is heuristic (not a type checker):
+// it catches deprecated APIs, common Roblox mistakes, and obvious structural problems.
+
+/** Blank out comments (view `noComments`) and comments + string contents (view `noStrings`). */
+function strip(code) {
+  const a = code.split('');
+  const b = code.split('');
+  const n = code.length;
+  const blank = (arr, from, to) => {
+    for (let k = from; k < to; k++) if (arr[k] !== '\n') arr[k] = ' ';
+  };
+  let i = 0;
+  while (i < n) {
+    const c = code[i];
+    if (c === '-' && code[i + 1] === '-') {
+      const lb = /^--\[(=*)\[/.exec(code.slice(i, i + 40));
+      let end;
+      if (lb) {
+        const close = ']' + lb[1] + ']';
+        const j = code.indexOf(close, i + lb[0].length);
+        end = j < 0 ? n : j + close.length;
+      } else {
+        const j = code.indexOf('\n', i);
+        end = j < 0 ? n : j;
+      }
+      blank(a, i, end);
+      blank(b, i, end);
+      i = end;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1;
+      while (j < n) {
+        const d = code[j];
+        if (d === '\\') {
+          j += 2;
+          continue;
+        }
+        if (d === c) break;
+        if (d === '\n' && c !== '`') break;
+        j++;
+      }
+      blank(b, i + 1, Math.min(j, n));
+      i = Math.min(j + 1, n);
+      continue;
+    }
+    if (c === '[') {
+      const ls = /^\[(=*)\[/.exec(code.slice(i, i + 40));
+      if (ls) {
+        const close = ']' + ls[1] + ']';
+        const j = code.indexOf(close, i + ls[0].length);
+        blank(b, i + ls[0].length, j < 0 ? n : j);
+        i = j < 0 ? n : j + close.length;
+        continue;
+      }
+    }
+    i++;
+  }
+  return { noComments: a.join(''), noStrings: b.join('') };
+}
+
+const lineOf = (text, idx) => {
+  let line = 1;
+  for (let k = 0; k < idx; k++) if (text.charCodeAt(k) === 10) line++;
+  return line;
+};
+
+const SERVICES_LAZY =
+  'TweenService|UserInputService|DataStoreService|HttpService|CollectionService|Debris|SoundService|MarketplaceService|TextService|PathfindingService|ContextActionService|RunService|PhysicsService|ContentProvider|TeleportService|MessagingService|BadgeService';
+const SERVICES_EAGER =
+  'Players|ReplicatedStorage|ServerStorage|ServerScriptService|Lighting|StarterGui|StarterPack|StarterPlayer|Teams|ReplicatedFirst';
+
+// Simple pattern rules. `view` picks which scrubbed copy of the source the regex runs on.
+const RULES = [
+  {
+    id: 'deprecated-wait', sev: 'warn', view: 'noStrings', kb: 'task-library',
+    lead: true, re: /(^|[^\w.:])wait\s*\(/g,
+    msg: '`wait()` is deprecated and throttled. Use `task.wait()`.',
+  },
+  {
+    id: 'deprecated-spawn', sev: 'warn', view: 'noStrings', kb: 'task-library',
+    lead: true, re: /(^|[^\w.:])spawn\s*\(/g,
+    msg: '`spawn()` is deprecated and delays the call. Use `task.spawn()` (now) or `task.defer()` (end of frame).',
+  },
+  {
+    id: 'deprecated-delay', sev: 'warn', view: 'noStrings', kb: 'task-library',
+    lead: true, re: /(^|[^\w.:])delay\s*\(/g,
+    msg: '`delay()` is deprecated. Use `task.delay()`.',
+  },
+  {
+    id: 'deprecated-tick', sev: 'warn', view: 'noStrings', kb: 'deprecated-apis',
+    lead: true, re: /(^|[^\w.:])tick\s*\(/g,
+    msg: '`tick()` is deprecated. Use `os.clock()` for timing, `os.time()` for Unix time, or `workspace:GetServerTimeNow()` for synced time.',
+  },
+  {
+    id: 'lowercase-connect', sev: 'warn', view: 'noStrings', kb: 'deprecated-apis',
+    re: /:\s*(connect|disconnect)\s*\(/g,
+    msg: 'Lowercase `:connect()` / `:disconnect()` are deprecated. Use `:Connect()` / `:Disconnect()`.',
+  },
+  {
+    id: 'game-workspace', sev: 'info', view: 'noStrings', kb: 'services-getservice',
+    re: /\bgame\.Workspace\b/g,
+    msg: 'Use the `workspace` global instead of `game.Workspace`.',
+  },
+  {
+    id: 'game-service-lazy', sev: 'warn', view: 'noStrings', kb: 'services-getservice',
+    re: new RegExp(`\\bgame\\.(${SERVICES_LAZY})\\b`, 'g'),
+    msg: 'Use `game:GetService("...")`. Indexing `game.X` can error if the service has not been created yet.',
+  },
+  {
+    id: 'game-service', sev: 'info', view: 'noStrings', kb: 'services-getservice',
+    re: new RegExp(`\\bgame\\.(${SERVICES_EAGER})\\b`, 'g'),
+    msg: 'Prefer `game:GetService("...")` (it also survives renamed services).',
+  },
+  {
+    id: 'find-part-on-ray', sev: 'warn', view: 'noStrings', kb: 'raycasting',
+    re: /:\s*FindPartOnRay\w*\s*\(/g,
+    msg: '`FindPartOnRay*` is deprecated. Use `workspace:Raycast(origin, direction, raycastParams)`.',
+  },
+  {
+    id: 'instance-new-parent', sev: 'warn', view: 'noComments', kb: 'performance-tips',
+    re: /Instance\.new\(\s*(["'])[^"']*\1\s*,/g,
+    msg: 'Do not pass the parent as the 2nd argument of `Instance.new`. Set every property first and `.Parent` last.',
+  },
+  {
+    id: 'deprecated-bodymover', sev: 'warn', view: 'noComments', kb: 'physics-constraints',
+    re: /Instance\.new\(\s*["'](BodyVelocity|BodyPosition|BodyGyro|BodyForce|BodyThrust|BodyAngularVelocity)["']/g,
+    msg: 'Body movers are deprecated. Use `LinearVelocity`, `AlignPosition`, `AlignOrientation`, `VectorForce`, `Torque` or `AngularVelocity` with an `Attachment`.',
+  },
+  {
+    id: 'raycast-filter-old', sev: 'warn', view: 'noStrings', kb: 'raycasting',
+    re: /Enum\.RaycastFilterType\.(Blacklist|Whitelist)/g,
+    msg: '`Blacklist`/`Whitelist` are deprecated. Use `Enum.RaycastFilterType.Exclude` / `Include`.',
+  },
+  {
+    id: 'humanoid-loadanimation', sev: 'warn', view: 'noStrings', kb: 'animation',
+    re: /[Hh]umanoid\s*:\s*LoadAnimation\s*\(/g,
+    msg: '`Humanoid:LoadAnimation` is deprecated. Load animations on the `Animator` inside the Humanoid.',
+  },
+  {
+    id: 'set-primary-part-cframe', sev: 'info', view: 'noStrings', kb: 'cframe-vector-math',
+    re: /:\s*SetPrimaryPartCFrame\s*\(/g,
+    msg: '`SetPrimaryPartCFrame` is deprecated. Use `model:PivotTo(cframe)`.',
+  },
+  {
+    id: 'physics-collision-old', sev: 'warn', view: 'noStrings', kb: 'collision-groups',
+    re: /:\s*(SetPartCollisionGroup|GetCollisionGroupName|CreateCollisionGroup)\s*\(/g,
+    msg: 'The old collision group calls are deprecated. Use `PhysicsService:RegisterCollisionGroup` and set `BasePart.CollisionGroup`.',
+  },
+  {
+    id: 'loadstring', sev: 'warn', view: 'noStrings', kb: 'anti-exploit-server-validation',
+    lead: true, re: /(^|[^\w.:])loadstring\s*\(/g,
+    msg: '`loadstring` is disabled by default and is a security risk. Avoid running dynamic code.',
+  },
+  {
+    id: 'require-asset-id', sev: 'warn', view: 'noStrings', kb: 'anti-exploit-server-validation',
+    lead: true, re: /(^|[^\w.:])require\s*\(\s*\d{5,}\s*\)/g,
+    msg: '`require(<assetId>)` runs code you did not review. This is a common backdoor vector. Vendor the module into your place instead.',
+  },
+  {
+    id: 'getfenv', sev: 'warn', view: 'noStrings', kb: 'deprecated-apis',
+    lead: true, re: /(^|[^\w.:])(getfenv|setfenv)\s*\(/g,
+    msg: '`getfenv`/`setfenv` are deprecated and disable VM optimizations. Pass values explicitly or use a ModuleScript.',
+  },
+  {
+    id: 'global-unpack', sev: 'info', view: 'noStrings', kb: 'deprecated-apis',
+    lead: true, re: /(^|[^\w.:])unpack\s*\(/g,
+    msg: 'Use `table.unpack` instead of the global `unpack`.',
+  },
+  {
+    id: 'table-getn', sev: 'info', view: 'noStrings', kb: 'deprecated-apis',
+    re: /\btable\.(getn|foreach|foreachi)\s*\(/g,
+    msg: '`table.getn/foreach/foreachi` are deprecated. Use `#t` and a generic `for` loop.',
+  },
+  {
+    id: 'remote-fire-client-bad', sev: 'info', view: 'noStrings', kb: 'remote-functions',
+    re: /:\s*InvokeClient\s*\(/g,
+    msg: '`RemoteFunction:InvokeClient` can hang forever or error if the client misbehaves. Prefer `RemoteEvent` for server-to-client calls.',
+  },
+];
+
+function checkBrackets(text, out) {
+  const stack = [];
+  const pairs = { ')': '(', ']': '[', '}': '{' };
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(' || ch === '[' || ch === '{') stack.push([ch, i]);
+    else if (ch === ')' || ch === ']' || ch === '}') {
+      const top = stack.pop();
+      if (!top || top[0] !== pairs[ch]) {
+        out.push({
+          line: lineOf(text, i), sev: 'error', id: 'brackets', kb: null,
+          msg: `Unmatched \`${ch}\`.`,
+        });
+        return;
+      }
+    }
+  }
+  if (stack.length) {
+    const [ch, i] = stack[stack.length - 1];
+    out.push({ line: lineOf(text, i), sev: 'error', id: 'brackets', kb: null, msg: `\`${ch}\` is never closed.` });
+  }
+}
+
+function checkInfiniteLoops(text, out) {
+  const start = /\bwhile\s+true\s+do\b/g;
+  let m;
+  while ((m = start.exec(text))) {
+    let depth = 1;
+    const tok = /\b(function|do|then|repeat|elseif|end|until)\b/g;
+    tok.lastIndex = start.lastIndex;
+    let t;
+    let endIdx = text.length;
+    while ((t = tok.exec(text))) {
+      const w = t[1];
+      if (w === 'function' || w === 'do' || w === 'then' || w === 'repeat') depth++;
+      else depth--;
+      if (depth === 0) {
+        endIdx = t.index;
+        break;
+      }
+    }
+    const body = text.slice(start.lastIndex, endIdx);
+    const yields = /\b(wait|Wait|WaitForChild|Heartbeat|RenderStepped|Stepped|PreRender|PreSimulation|PostSimulation|yield)\b/.test(body);
+    const exits = /\b(break|return)\b/.test(body);
+    if (!yields && !exits) {
+      out.push({
+        line: lineOf(text, m.index), sev: 'error', id: 'no-yield-loop', kb: 'task-library',
+        msg: '`while true do` has no yield (`task.wait()`) and no exit. It will freeze the script until Roblox times it out.',
+      });
+    }
+  }
+}
+
+function checkDataStoreCalls(text, out) {
+  const re = /:\s*(GetAsync|SetAsync|UpdateAsync|IncrementAsync|RemoveAsync|GetSortedAsync|RequestAsync|PostAsync)\s*\(/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const windowText = text.slice(Math.max(0, m.index - 350), m.index);
+    // Accept pcall/xpcall directly, or a retry/safe-call helper wrapping the call.
+    if (!/\b(x?pcall|\w*[Rr]etry\w*|\w*[Ss]afe\w*)\s*\(/.test(windowText)) {
+      out.push({
+        line: lineOf(text, m.index), sev: 'warn', id: 'unprotected-async', kb: 'datastore-basics',
+        msg: `\`${m[1]}\` can fail (throttling, outages, HTTP errors). Wrap it in \`pcall\` and retry.`,
+      });
+    }
+  }
+}
+
+function checkServerEvents(text, out) {
+  const re = /OnServerEvent\s*:\s*Connect\s*\(\s*function\s*\(([^)]*)\)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const first = m[1].split(',')[0].split(':')[0].trim();
+    if (!first || !/(player|plr|client|user|sender|caller|^p$|^ply$|^plyr$)/i.test(first)) {
+      out.push({
+        line: lineOf(text, m.index), sev: 'warn', id: 'server-event-args', kb: 'remote-events',
+        msg: `The first parameter of \`OnServerEvent\` is always the Player who fired it (yours is \`${first || '(none)'}\`). Client arguments come after it.`,
+      });
+    }
+  }
+}
+
+function checkStrict(code, out) {
+  const lines = code.split('\n').length;
+  if (lines >= 15 && !/^\s*--!(strict|nonstrict|nocheck)/m.test(code)) {
+    out.push({
+      line: 1, sev: 'info', id: 'no-strict', kb: 'strict-mode',
+      msg: 'Add `--!strict` at the top to get full type checking.',
+    });
+  }
+}
+
+function lintLuau(code) {
+  const { noComments, noStrings } = strip(code);
+  const views = { noComments, noStrings };
+  const out = [];
+  for (const r of RULES) {
+    const text = views[r.view];
+    r.re.lastIndex = 0;
+    let m;
+    while ((m = r.re.exec(text))) {
+      const at = m.index + (r.lead ? m[1].length : 0);
+      out.push({ line: lineOf(text, at), sev: r.sev, id: r.id, kb: r.kb, msg: r.msg });
+      if (m[0].length === 0) r.re.lastIndex++;
+    }
+  }
+  checkBrackets(noStrings, out);
+  checkInfiniteLoops(noStrings, out);
+  checkDataStoreCalls(noStrings, out);
+  checkServerEvents(noStrings, out);
+  checkStrict(code, out);
+  const order = { error: 0, warn: 1, info: 2 };
+  out.sort((x, y) => order[x.sev] - order[y.sev] || x.line - y.line);
+  return out;
+}
+
+function formatFindings(findings, { plain = false } = {}) {
+  if (!findings.length) return 'No problems found.';
+  return findings
+    .map((f) => {
+      const tag = f.sev === 'error' ? 'ERROR' : f.sev === 'warn' ? 'WARN' : 'tip';
+      return plain ? `- line ${f.line} [${tag}]: ${f.msg}` : `- **${tag}** line ${f.line}: ${f.msg}`;
+    })
+    .join('\n');
+}
+
+function looksLikeLuau(text) {
+  const hits = (text.match(/\b(local|function|end|then|game|workspace|script|task|Instance|Vector3|CFrame)\b/g) || []).length;
+  if (hits >= 3 && /\b(end|local)\b/.test(text)) return true;
+  // Short snippets: a block closer, a block opener and code punctuation, which plain prose rarely has.
+  return /\bend\b/.test(text) && /\b(local|function|then|do)\b/.test(text) && /[=()]/.test(text);
+}
+
+return { strip, lintLuau, formatFindings, looksLikeLuau };
+})();
+
+const __m_kb = (() => {
+// Knowledge base: parsing, serialising and BM25-style search.
+// Entries live in plain markdown files so anyone can add to them with a pull request.
+//
+// Format of an entry:
+//   @@@ entry-id
+//   title: Human readable title
+//   tags: extra search words
+//   ---
+//   Markdown body (code fences allowed)
+
+const KB_FILES = ['kb/core.md', 'kb/roblox.md', 'kb/patterns.md', 'kb/community.md'];
+
+const STOP = new Set(
+  ('a an the is are was were be been to of in on for and or with how do does did i my me you your it its ' +
+    'this that these those can could would should what why when where which who use using used from at as by ' +
+    'if so not no but just also into than then there here make makes get gets want need please help roblox luau')
+    .split(' ')
+);
+
+function parseKB(text, source = 'kb') {
+  const out = [];
+  const chunks = text.replace(/\r\n/g, '\n').split(/^@@@[ \t]*/m).slice(1);
+  for (const c of chunks) {
+    const nl = c.indexOf('\n');
+    if (nl < 0) continue;
+    const id = c.slice(0, nl).trim();
+    const rest = c.slice(nl + 1);
+    const m = rest.match(/^---[ \t]*$/m);
+    if (!m) continue;
+    const head = rest.slice(0, m.index);
+    const body = rest.slice(m.index + m[0].length).trim();
+    const meta = {};
+    for (const line of head.split('\n')) {
+      const k = line.match(/^(\w+):\s*(.*)$/);
+      if (k) meta[k[1]] = k[2].trim();
+    }
+    if (id && meta.title && body) out.push({ id, title: meta.title, tags: meta.tags || '', text: body, source });
+  }
+  return out;
+}
+
+function serializeEntries(entries) {
+  return (
+    entries
+      .map((e) => `@@@ ${e.id}\ntitle: ${e.title.replace(/\n/g, ' ')}\ntags: ${e.tags || ''}\n---\n${e.text}\n`)
+      .join('\n') + '\n'
+  );
+}
+
+async function loadKB(base = './') {
+  const embedded = (typeof window !== 'undefined' && window.__LUAUFORGE_KB__) || {};
+  const canFetch = typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
+  const all = [];
+  const results = await Promise.allSettled(
+    KB_FILES.map(async (f) => {
+      // Single-file build: core files are embedded, so no network is needed.
+      // community.md is still fetched when hosted, so contributions show up without a rebuild.
+      const preferEmbedded = typeof embedded[f] === 'string' && f !== 'kb/community.md';
+      let text = preferEmbedded ? embedded[f] : null;
+      if (text === null && canFetch) {
+        try {
+          const res = await fetch(base + f, { cache: 'no-cache' });
+          if (res.ok) text = await res.text();
+        } catch {
+          /* offline or missing: fall back to the embedded copy */
+        }
+      }
+      if (text === null) text = embedded[f];
+      if (typeof text !== 'string') throw new Error(f + ' not available');
+      return parseKB(text, f);
+    })
+  );
+  for (const r of results) if (r.status === 'fulfilled') all.push(...r.value);
+  return all;
+}
+
+function stem(w) {
+  return w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w;
+}
+
+function tokenize(s) {
+  const out = [];
+  for (const raw of s.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []) {
+    const parts = raw
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .split(' ');
+    for (const w of parts) if (w.length > 1 && !STOP.has(w)) out.push(stem(w));
+    const joined = raw.toLowerCase().replace(/_/g, '');
+    if (parts.length > 1 && joined.length > 3) out.push(joined);
+  }
+  return out;
+}
+
+class Index {
+  constructor(docs) {
+    this.docs = docs;
+    this.rows = docs.map((d) => {
+      const tf = new Map();
+      let len = 0;
+      const add = (toks, w) => {
+        for (const t of toks) {
+          tf.set(t, (tf.get(t) || 0) + w);
+          len += w;
+        }
+      };
+      add(tokenize(d.title), 3);
+      add(tokenize(d.tags || ''), 2);
+      add(tokenize(d.text), 1);
+      return { tf, len };
+    });
+    this.avg = this.rows.reduce((s, r) => s + r.len, 0) / Math.max(1, this.rows.length);
+    this.df = new Map();
+    for (const r of this.rows) for (const t of r.tf.keys()) this.df.set(t, (this.df.get(t) || 0) + 1);
+  }
+
+  search(query, k = 4) {
+    const q = [...new Set(tokenize(query))];
+    if (!q.length) return [];
+    const N = this.rows.length;
+    const k1 = 1.4;
+    const b = 0.6;
+    const out = [];
+    this.rows.forEach((row, i) => {
+      const bm = (f, df) => {
+        const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
+        return (idf * (f * (k1 + 1))) / (f + k1 * (1 - b + (b * row.len) / this.avg));
+      };
+      let score = 0;
+      let hit = 0;
+      for (const qt of q) {
+        let best = 0;
+        const exact = row.tf.get(qt);
+        if (exact) {
+          best = bm(exact, this.df.get(qt));
+        } else if (qt.length >= 4) {
+          for (const [t, f] of row.tf) {
+            if (t.length >= 4 && (t.startsWith(qt) || qt.startsWith(t))) {
+              best = Math.max(best, 0.5 * bm(f, this.df.get(t)));
+            }
+          }
+        }
+        if (best > 0) {
+          score += best;
+          hit++;
+        }
+      }
+      if (score > 0) out.push({ doc: this.docs[i], score, ratio: hit / q.length });
+    });
+    out.sort((a, b2) => b2.score - a.score || b2.ratio - a.ratio);
+    return out.slice(0, k);
+  }
+}
+
+return { KB_FILES, parseKB, serializeEntries, loadKB, tokenize, Index };
+})();
+
+const __m_memory = (() => {
+// Self-learning memory. The model's weights never change; instead the app keeps lessons
+// (question + verified answer) in this browser and retrieves the best match for every new
+// question. Lessons can be exported as markdown and contributed to kb/community.md.
+
+const { parseKB, serializeEntries } = __m_kb;
+const KEY = 'luauforge.lessons.v1';
+const MAX_ITEMS = 300;
+
+let items = load();
+
+function load() {
+  try {
+    const v = JSON.parse(localStorage.getItem(KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function persist() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(items));
+  } catch {
+    /* storage may be blocked; lessons then last for this session only */
+  }
+}
+
+function hash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+const list = () => items.slice();
+
+function add(q, a, kind = 'taught') {
+  q = String(q || '').trim();
+  a = String(a || '').trim();
+  if (!q || !a) return null;
+  const id = 't-' + hash(q.toLowerCase().replace(/\s+/g, ' '));
+  const rec = { id, q: q.slice(0, 300), a: a.slice(0, 8000), kind, ts: Date.now() };
+  const i = items.findIndex((x) => x.id === id);
+  if (i >= 0) items.splice(i, 1);
+  items.unshift(rec);
+  items = items.slice(0, MAX_ITEMS);
+  persist();
+  return rec;
+}
+
+function remove(id) {
+  items = items.filter((x) => x.id !== id);
+  persist();
+}
+
+function clear() {
+  items = [];
+  persist();
+}
+
+const docs = () => items.map((x) => ({ id: x.id, title: x.q, tags: '', text: x.a }));
+
+function exportText() {
+  return serializeEntries(items.map((x) => ({ id: x.id, title: x.q, tags: x.kind, text: x.a })));
+}
+
+function importText(text) {
+  let n = 0;
+  for (const e of parseKB(text, 'import')) if (add(e.title, e.text, e.tags || 'taught')) n++;
+  return n;
+}
+
+return { hash, list, add, remove, clear, docs, exportText, importText };
+})();
+
+const __m_llm = (() => {
+// In-browser language model via WebLLM (WebGPU). Free, no API key, no server: the model
+// weights download once from a public CDN, are cached by the browser, and run on the
+// visitor's own GPU. The import is lazy so the app still works (docs mode) if it fails.
+
+const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.79';
+
+const MODELS = [
+  { key: 'Qwen2.5-Coder-0.5B-Instruct', label: 'Tiny: 0.5B (about 1 GB, phones and old GPUs)' },
+  { key: 'Qwen2.5-Coder-1.5B-Instruct', label: 'Fast: 1.5B (about 1.6 GB)' },
+  { key: 'Qwen2.5-Coder-3B-Instruct', label: 'Balanced: 3B (about 2.5 GB)' },
+  { key: 'Qwen2.5-Coder-7B-Instruct', label: 'Best: 7B (about 5 GB, needs a strong GPU)' },
+];
+
+async function probeGPU() {
+  if (typeof navigator === 'undefined' || !('gpu' in navigator)) {
+    return { ok: false, f16: false, reason: 'This browser has no WebGPU. Use a recent Chrome or Edge to run the AI model. Docs mode still works.' };
+  }
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) return { ok: false, f16: false, reason: 'No usable GPU was found. Docs mode still works.' };
+    return { ok: true, f16: adapter.features.has('shader-f16'), reason: '' };
+  } catch (e) {
+    return { ok: false, f16: false, reason: 'WebGPU failed to start: ' + (e && e.message ? e.message : e) };
+  }
+}
+
+class Brain {
+  constructor() {
+    this.engine = null;
+    this.label = '';
+    this.loading = false;
+    this.lastFinish = null;
+  }
+
+  get ready() {
+    return !!this.engine;
+  }
+
+  async load({ modelKey, f16, custom, onProgress }) {
+    if (this.loading || this.engine) return;
+    this.loading = true;
+    try {
+      const webllm = await import(/* @vite-ignore */ WEBLLM_URL);
+      let modelId = modelKey + (f16 ? '-q4f16_1-MLC' : '-q4f32_1-MLC');
+      let appConfig;
+      if (custom && custom.id && custom.model && custom.lib) {
+        // Your own fine-tuned model, converted to MLC format (see README).
+        appConfig = {
+          ...webllm.prebuiltAppConfig,
+          model_list: [
+            ...webllm.prebuiltAppConfig.model_list,
+            { model: custom.model, model_id: custom.id, model_lib: custom.lib },
+          ],
+        };
+        modelId = custom.id;
+      } else {
+        const ids = webllm.prebuiltAppConfig.model_list.map((m) => m.model_id);
+        if (!ids.includes(modelId)) {
+          const alt = ids.find((id) => /Coder-1\.5B.*q4f16/.test(id)) || ids.find((id) => /Coder/.test(id));
+          if (!alt) throw new Error('No coding model is available in this WebLLM version.');
+          modelId = alt;
+        }
+      }
+      this.engine = await webllm.CreateMLCEngine(
+        modelId,
+        { appConfig, initProgressCallback: (r) => onProgress && onProgress(r.progress || 0, r.text || '') }
+      );
+      this.label = modelId.replace(/-MLC$/, '').replace(/-q4f(16|32)_1$/, '');
+    } catch (e) {
+      this.engine = null;
+      throw e;
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async *stream(messages, { temperature = 0.2, maxTokens = 1024, signal } = {}) {
+    if (!this.engine) throw new Error('The model is not loaded.');
+    this.lastFinish = null;
+    const stop = () => {
+      try {
+        if (typeof this.engine.interruptGenerate === 'function') this.engine.interruptGenerate();
+      } catch {
+        /* nothing to interrupt */
+      }
+    };
+    if (signal) signal.addEventListener('abort', stop);
+    try {
+      const chunks = await this.engine.chat.completions.create({
+        messages,
+        stream: true,
+        temperature,
+        top_p: 0.9,
+        max_tokens: maxTokens,
+      });
+      for await (const ch of chunks) {
+        const c = ch.choices && ch.choices[0];
+        if (c && c.delta && c.delta.content) yield c.delta.content;
+        if (c && c.finish_reason) this.lastFinish = c.finish_reason;
+        if (signal && signal.aborted) break;
+      }
+    } finally {
+      if (signal) signal.removeEventListener('abort', stop);
+    }
+  }
+}
+
+return { MODELS, probeGPU, Brain };
+})();
+
+const __m_app = (() => {
+// LuauForge: a free, Luau-specialised coding assistant that runs entirely in the browser.
+//
+//  - Docs mode (instant, works everywhere): retrieves from the Luau knowledge base, runs the
+//    built-in checker on pasted code, and replays answers you taught it.
+//  - AI mode (optional, free): an open-weights coding model running on your GPU via WebGPU,
+//    grounded by the same knowledge base and lessons, with an automatic self-check loop.
+
+const { renderMD, inlineMD, esc, extractCode, isLuaLang } = __m_md;
+const { lintLuau, formatFindings, looksLikeLuau } = __m_lint;
+const { loadKB, Index } = __m_kb;
+const memory = __m_memory;
+const { Brain, MODELS, probeGPU } = __m_llm;
+const $ = (s) => document.querySelector(s);
+
+const LS = {
+  get(k, d) {
+    try {
+      const v = localStorage.getItem(k);
+      return v ? JSON.parse(v) : d;
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {
+      /* storage unavailable: the app still works for this session */
+    }
+  },
+};
+
+/* ------------------------------------------------------------------ prompts */
+
+const SYSTEM = [
+  'You are LuauForge, an expert Roblox and Luau programmer. You only help with Luau, Roblox Studio and the Roblox engine API. If asked about anything else, reply in one sentence that you only do Luau and Roblox, and ask for a Luau question.',
+  '',
+  'Rules for every answer:',
+  '1. Write modern Luau, not Lua 5.1: type annotations (--!strict when useful), continue, string interpolation with backticks, +=, if-expressions, generalized iteration (for k, v in t do).',
+  '2. Never use deprecated APIs. Use task.wait/task.spawn/task.delay/task.defer instead of wait/spawn/delay; os.clock() instead of tick(); workspace:Raycast instead of FindPartOnRay; LinearVelocity/AlignPosition instead of BodyVelocity/BodyPosition; Animator:LoadAnimation; :Connect with a capital C; game:GetService("X").',
+  '3. Never trust the client. Validate every RemoteEvent/RemoteFunction argument on the server (type, range, cooldown, distance). The first argument of OnServerEvent is always the Player.',
+  '4. Wrap DataStore and HTTP calls in pcall with retries. Save on PlayerRemoving and game:BindToClose.',
+  '5. Say whether code belongs in a Script, LocalScript or ModuleScript, and where to put it.',
+  '6. Disconnect connections and destroy instances you no longer need.',
+  '7. Give complete, runnable code in ```lua blocks, then 2 to 5 short lines of explanation. If you are unsure an API exists, say so instead of inventing one.',
+  'Reference notes below are accurate. Prefer them over your own memory.',
+].join('\n');
+
+const MODE_PROMPTS = {
+  ask: '',
+  write: 'Mode: write. Output one complete script, and state its container (Script, LocalScript or ModuleScript) and parent.',
+  debug: 'Mode: debug. Find the root cause first (nil access, yielding, replication, run order, wrong container). Then give the smallest fix and how to confirm it worked.',
+  review: 'Mode: review. List problems by severity: exploits (unvalidated remotes), memory leaks, deprecated APIs, performance, race conditions. Give a concrete fix for each.',
+  explain: 'Mode: explain. Explain what the code does in plain language, then the non-obvious parts. Match the depth to the user.',
+  convert: 'Mode: convert. Convert legacy Roblox Lua to modern Luau without changing behavior: task library, :Connect, Raycast, typed signatures. List what changed.',
+  optimize: 'Mode: optimize. Find the real hot spots (per-frame searches, allocations, polling). Show the faster version and explain the gain. Do not change behavior.',
+  types: 'Mode: types. Add --!strict and complete type annotations, export useful types, and fix any resulting type errors.',
+};
+
+const MODE_LABELS = {
+  ask: 'Ask anything',
+  write: 'Write a script',
+  debug: 'Debug',
+  review: 'Review',
+  explain: 'Explain code',
+  convert: 'Convert to modern Luau',
+  optimize: 'Optimize',
+  types: 'Add types',
+};
+
+const STARTERS = [
+  'How do I save player data safely with DataStores?',
+  'Why does wait() show as deprecated?',
+  'Make a part that tweens up and down forever',
+  'How do I stop exploiters abusing my RemoteEvent?',
+];
+
+const NO_MATCH =
+  "I don't have a note on that yet. Load the AI model (button at the top) for open-ended questions, or teach me: open **Lessons** to save a question and the answer, and I'll use it next time.";
+
+/* ------------------------------------------------------------------ state */
+
+const DEFAULTS = {
+  modelKey: 'Qwen2.5-Coder-1.5B-Instruct',
+  customId: '',
+  customModel: '',
+  customLib: '',
+  temperature: 0.2,
+  maxTokens: 1024,
+  selfCheck: true,
+  autoLoad: true,
+  mode: 'ask',
+};
+
+const state = {
+  settings: { ...DEFAULTS, ...LS.get('luauforge.settings', {}) },
+  messages: LS.get('luauforge.chat', []),
+  brain: new Brain(),
+  gpu: { ok: false, f16: false, reason: 'Checking your GPU...' },
+  kb: [],
+  kbIndex: new Index([]),
+  memIndex: new Index([]),
+  busy: false,
+  streaming: false,
+  abort: null,
+};
+
+const saveSettings = () => LS.set('luauforge.settings', state.settings);
+const saveChat = () => LS.set('luauforge.chat', state.messages.slice(-60));
+const rebuildMemIndex = () => {
+  state.memIndex = new Index(memory.docs());
+  renderTree();
+};
+
+/* ------------------------------------------------------------------ rendering */
+
+const box = $('#messages');
+let rafPending = false;
+
+function setStatus(text) {
+  $('#status').textContent = text || '';
+}
+
+function setPill(text, kind) {
+  const pill = $('#pill');
+  pill.textContent = text;
+  pill.className = 'pill ' + kind;
+}
+
+function provenance(m) {
+  if (m.via === 'docs') {
+    if (m.kind === 'lesson') return 'From your lessons.';
+    if (m.kind === 'note') return 'From the built-in notes.';
+    if (!m.content && Array.isArray(m.findings)) return 'Checked with the built-in checker. These are heuristic rules, so still test in Studio.';
+    return 'Answered from the built-in notes.';
+  }
+  if (m.revised) return 'AI model, rewritten after the checker found problems.';
+  return 'Answered by the AI model.';
+}
+
+function msgHTML(m, i) {
+  if (m.role === 'user') {
+    return (
+      `<div class="msg user"><span class="glyph" aria-hidden="true">&gt;</span>` +
+      `<div class="body">${renderMD(!m.content.includes('```') && looksLikeLuau(m.content) ? '```lua\n' + m.content + '\n```' : m.content)}</div></div>`
+    );
+  }
+  const streamingThis = state.streaming && i === state.messages.length - 1;
+  const body = renderMD(m.content || '');
+  if (m.superseded) {
+    return (
+      `<details class="msg draft"><summary>First draft, replaced after the checker found problems</summary>` +
+      `<div class="body">${body}</div></details>`
+    );
+  }
+  const panel = Array.isArray(m.findings) ? `<div class="lint standalone">${outputHTML(m.findings)}</div>` : '';
+  const notes = m.notes ? `<div class="selfcheck"><strong>The checker found:</strong>${renderMD(m.notes)}</div>` : '';
+  const cut =
+    m.cut && !streamingThis
+      ? `<div class="cut">The answer hit the length limit.<button type="button" data-act="continue">Continue</button></div>`
+      : '';
+  let meta = '';
+  if (!streamingThis && (m.content || Array.isArray(m.findings))) {
+    meta =
+      `<footer class="meta"><span>${esc(provenance(m))}</span><span class="acts">` +
+      `<button type="button" data-act="good" title="Save this answer so it is reused for similar questions">Good answer</button>` +
+      `<button type="button" data-act="fix" title="Edit the answer and save the corrected version">Correct it</button>` +
+      `<button type="button" data-act="retry">Retry</button></span></footer>`;
+  }
+  return (
+    `<article class="msg assistant" data-i="${i}">${notes}${panel}` +
+    (m.content || streamingThis ? `<div class="body${streamingThis ? ' cursor' : ''}">${body}</div>` : '') + `${cut}${meta}</article>`
+  );
+}
+
+function codeText(el) {
+  return Array.from(el.querySelectorAll('.l'))
+    .map((l) => l.textContent)
+    .join('\n');
+}
+
+const SEV_WORD = { error: 'Error', warn: 'Warning', info: 'Tip' };
+
+function outputHTML(findings) {
+  const issues = findings.filter((x) => x.sev !== 'info');
+  const tips = findings.length - issues.length;
+  if (!findings.length) return '<div class="out-head"><span>Output</span></div><p class="clean">No problems found.</p>';
+  const count =
+    `${issues.length} problem${issues.length === 1 ? '' : 's'}` + (tips ? `, ${tips} tip${tips === 1 ? '' : 's'}` : '');
+  const rows = findings
+    .map(
+      (f) =>
+        `<li class="${f.sev}"><span class="sev">${SEV_WORD[f.sev]}</span><span class="at">line ${f.line}</span>` +
+        `<span class="txt">${inlineMD(f.msg)}</span></li>`
+    )
+    .join('');
+  return `<div class="out-head"><span>Output</span><span>${count}</span></div><ul>${rows}</ul>`;
+}
+
+function decorate() {
+  // Attach checker output under every Luau block of finished assistant messages.
+  box.querySelectorAll('.msg.assistant').forEach((el) => {
+    el.querySelectorAll('.code[data-lang="lua"]').forEach((blockEl) => {
+      if (blockEl.querySelector('.lint')) return;
+      const code = codeText(blockEl);
+      if (code.split('\n').length < 2) return;
+      const div = document.createElement('div');
+      div.className = 'lint';
+      div.innerHTML = outputHTML(lintLuau(code));
+      blockEl.appendChild(div);
+    });
+  });
+}
+
+function renderAll() {
+  if (!state.messages.length) {
+    const ai = state.brain.ready;
+    const intro = ai
+      ? '-- The AI model is loaded. Answers use the built-in notes and are checked before you see them.'
+      : '-- Ask a question, or paste a script and press Enter.\n-- Answers come from the built-in notes until you load the AI model.';
+    box.innerHTML =
+      `<div class="empty"><pre class="blank">${esc(intro)}</pre>` +
+      `<ul class="starters">${STARTERS.map((t) => `<li><button type="button" data-starter="${esc(t)}">${esc(t)}</button></li>`).join('')}</ul></div>`;
+    return;
+  }
+  box.innerHTML = state.messages.map(msgHTML).join('');
+  if (!state.streaming) decorate();
+}
+
+/* notes tree (the built-in knowledge base plus your lessons) */
+
+const GROUPS = [
+  ['kb/core.md', 'Luau language'],
+  ['kb/roblox.md', 'Roblox engine'],
+  ['kb/patterns.md', 'Patterns'],
+  ['kb/community.md', 'Community'],
+];
+
+function renderTree() {
+  const tree = $('#tree');
+  if (!tree) return;
+  const open = new Set(Array.from(tree.querySelectorAll('details[open]')).map((d) => d.dataset.g));
+  const group = (g, label, items, kind) =>
+    `<details data-g="${g}"${open.has(g) ? ' open' : ''}><summary><span>${esc(label)}</span><span class="n">${items.length}</span></summary>` +
+    items
+      .map((it) => `<button type="button" class="note" data-${kind}="${esc(it.id)}" title="${esc(it.title)}">${esc(it.title)}</button>`)
+      .join('') +
+    `</details>`;
+  let html = '';
+  for (const [file, label] of GROUPS) {
+    const items = state.kb.filter((e) => e.source === file);
+    if (items.length) html += group(file, label, items, 'note');
+  }
+  const lessons = memory.list();
+  if (lessons.length) html += group('lessons', 'Taught by you', lessons.map((x) => ({ id: x.id, title: x.q })), 'lesson');
+  tree.innerHTML = html || '<p class="muted">Notes appear here once they load.</p>';
+}
+
+function openNote(kind, id) {
+  if (state.busy) return;
+  let title;
+  let text;
+  if (kind === 'note') {
+    const e = state.kb.find((x) => x.id === id);
+    if (!e) return;
+    title = e.title;
+    text = e.text;
+  } else {
+    const x = memory.list().find((l) => l.id === id);
+    if (!x) return;
+    title = x.q;
+    text = x.a;
+  }
+  state.messages.push({ role: 'user', content: `Open note: ${title}`, local: true });
+  state.messages.push({ role: 'assistant', via: 'docs', kind, local: true, content: `### ${title}\n\n${text}` });
+  saveChat();
+  renderAll();
+  box.scrollTop = box.scrollHeight;
+  closeRail();
+}
+
+function closeRail() {
+  document.body.classList.remove('rail-open');
+  const t = $('#railToggle');
+  if (t) t.setAttribute('aria-expanded', 'false');
+}
+
+function updateModes() {
+  const cur = state.settings.mode;
+  document.querySelectorAll('#modeList [data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === cur)));
+  $('#modeNote').textContent = 'Mode: ' + MODE_LABELS[cur];
+}
+
+function scheduleRender() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => {
+    rafPending = false;
+    const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+    renderAll();
+    if (stick) box.scrollTop = box.scrollHeight;
+  });
+}
+
+function setBusy(busy) {
+  state.busy = busy;
+  $('#send').hidden = busy;
+  $('#stop').hidden = !busy || !state.abort;
+  $('#input').disabled = busy;
+  if (!busy) $('#input').focus();
+}
+
+/* ------------------------------------------------------------------ prompt building */
+
+const clip = (s, n) => (s.length > n ? s.slice(0, n) + '\n...(trimmed)' : s);
+
+function buildMessages(question) {
+  const mode = MODE_PROMPTS[state.settings.mode] || '';
+  const prose = question.replace(/```[\s\S]*?```/g, ' ');
+  const refs = state.kbIndex.search(prose || question, 3).filter((h) => h.ratio >= 0.34);
+  let refText = '';
+  for (const h of refs) {
+    const chunk = `### ${h.doc.title}\n${h.doc.text}\n`;
+    if (!refText) refText = clip(chunk, 2000);
+    else if ((refText + chunk).length <= 2000) refText += chunk;
+  }
+  const taught = state.memIndex.search(prose || question, 1).filter((h) => h.ratio >= 0.5);
+  let system = SYSTEM;
+  if (mode) system += '\n\n' + mode;
+  if (refText) system += '\n\nReference notes:\n' + refText;
+  if (taught.length) {
+    system += `\n\nAn answer the user verified for a similar question:\nQ: ${taught[0].doc.title}\nA: ${clip(taught[0].doc.text, 1200)}`;
+  }
+
+  const prior = state.messages.filter((m) => !m.superseded && !m.local && m.content);
+  const hist = [];
+  let used = 0;
+  for (let i = prior.length - 1; i >= 0 && used < 2800; i--) {
+    const c = clip(prior[i].content, prior[i].role === 'assistant' ? 1200 : 1500);
+    used += c.length;
+    hist.unshift({ role: prior[i].role, content: c });
+  }
+  while (hist.length && hist[0].role !== 'user') hist.shift();
+  return [{ role: 'system', content: system }, ...hist, { role: 'user', content: clip(question, 3500) }];
+}
+
+/* ------------------------------------------------------------------ docs mode */
+
+function docsAnswer(text, reply) {
+  const out = [];
+  const fenced = extractCode(text).map((b) => b.code);
+  const blocks = fenced.length ? fenced : looksLikeLuau(text) ? [text] : [];
+  const ruleKb = new Set();
+
+  if (blocks.length) {
+    const findings = blocks.flatMap((c) => lintLuau(c));
+    reply.findings = findings;
+    findings.forEach((f) => f.kb && ruleKb.add(f.kb));
+  }
+
+  const prose = text.replace(/```[\s\S]*?```/g, ' ').trim();
+  const query = prose || '';
+  const mem = query ? state.memIndex.search(query, 1).filter((h) => h.ratio >= 0.5) : [];
+  if (mem.length) out.push(`### ${mem[0].doc.title}\n_You taught me this answer._\n\n${mem[0].doc.text}`);
+
+  const hits = query ? state.kbIndex.search(query, 3).filter((h) => h.ratio >= 0.34 && h.score >= 1.5) : [];
+  const byId = new Map(state.kb.map((e) => [e.id, e]));
+  for (const id of ruleKb) {
+    const e = byId.get(id);
+    if (e && !hits.some((h) => h.doc.id === id)) hits.push({ doc: e });
+  }
+  hits.slice(0, 3).forEach((h) => out.push(`### ${h.doc.title}\n\n${h.doc.text}`));
+
+  if (!out.length) return Array.isArray(reply.findings) ? '' : NO_MATCH;
+  return out.join('\n\n');
+}
+
+/* ------------------------------------------------------------------ AI mode */
+
+async function streamInto(reply, messages) {
+  state.abort = new AbortController();
+  $('#stop').hidden = false;
+  state.streaming = true;
+  try {
+    for await (const d of state.brain.stream(messages, {
+      temperature: Number(state.settings.temperature) || 0.2,
+      maxTokens: Number(state.settings.maxTokens) || 1024,
+      signal: state.abort.signal,
+    })) {
+      reply.content += d;
+      scheduleRender();
+    }
+    reply.cut = state.brain.lastFinish === 'length';
+  } finally {
+    state.streaming = false;
+    state.abort = null;
+  }
+}
+
+async function selfCheck(question, reply) {
+  if (!state.settings.selfCheck) return;
+  const findings = extractCode(reply.content)
+    .filter((b) => isLuaLang(b.lang))
+    .flatMap((b) => lintLuau(b.code))
+    .filter((f) => f.sev !== 'info');
+  if (!findings.length) return;
+
+  reply.superseded = true;
+  const fix = { role: 'assistant', content: '', via: 'ai', revised: true, notes: formatFindings(findings) };
+  state.messages.push(fix);
+  scheduleRender();
+
+  const lean = [
+    { role: 'system', content: SYSTEM },
+    { role: 'user', content: clip(question, 1500) },
+    { role: 'assistant', content: clip(reply.content, 2500) },
+    {
+      role: 'user',
+      content:
+        'An automatic Luau checker found these problems in your code:\n' +
+        formatFindings(findings, { plain: true }) +
+        '\nRewrite the full corrected code. Do not use deprecated APIs. Keep the explanation to two lines.',
+    },
+  ];
+  await streamInto(fix, lean);
+}
+
+async function ask(text, { addUser = true } = {}) {
+  setStatus('');
+  const useAI = state.brain.ready;
+  const messages = useAI ? buildMessages(text) : null;
+  if (addUser) state.messages.push({ role: 'user', content: text });
+  const reply = { role: 'assistant', content: '', via: useAI ? 'ai' : 'docs' };
+  state.messages.push(reply);
+  setBusy(true);
+  scheduleRender();
+
+  try {
+    if (useAI) {
+      await streamInto(reply, messages);
+      await selfCheck(text, reply);
+    } else {
+      reply.content = docsAnswer(text, reply);
+    }
+  } catch (e) {
+    if (e && e.name !== 'AbortError') setStatus('Something went wrong: ' + (e.message || e));
+    if (!reply.content) {
+      const i = state.messages.indexOf(reply);
+      if (i >= 0) state.messages.splice(i, 1);
+    }
+  } finally {
+    state.streaming = false;
+    setBusy(false);
+    saveChat();
+    renderAll();
+    if (reply.via === 'docs') {
+      const users = box.querySelectorAll('.msg.user');
+      if (users.length) users[users.length - 1].scrollIntoView({ block: 'start' });
+    } else {
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ model loading */
+
+async function loadModel() {
+  const b = state.brain;
+  if (b.loading || b.ready) return;
+  if (!state.gpu.ok) {
+    setStatus(state.gpu.reason);
+    return;
+  }
+  const s = state.settings;
+  $('#progress').hidden = false;
+  $('#loadBtn').disabled = true;
+  setPill('Loading model... 0%', 'busy');
+  try {
+    await b.load({
+      modelKey: s.modelKey,
+      f16: state.gpu.f16,
+      custom: s.customId && s.customModel && s.customLib ? { id: s.customId, model: s.customModel, lib: s.customLib } : null,
+      onProgress: (p, t) => {
+        $('#bar').style.width = Math.round(p * 100) + '%';
+        setPill(`Loading model... ${Math.round(p * 100)}%`, 'busy');
+        $('#progressText').textContent = t;
+      },
+    });
+    LS.set('luauforge.loadedOnce', true);
+    setPill('AI ready: ' + b.label, 'ok');
+    if (!state.messages.length) renderAll();
+    $('#loadBtn').textContent = 'AI loaded';
+  } catch (e) {
+    setPill('Docs mode', 'idle');
+    $('#loadBtn').disabled = false;
+    setStatus('Could not load the AI model: ' + (e && e.message ? e.message : e) + '\nDocs mode still works.');
+  } finally {
+    $('#progress').hidden = true;
+  }
+}
+
+/* ------------------------------------------------------------------ dialogs */
+
+function fillSettings() {
+  const s = state.settings;
+  const sel = $('#modelKey');
+  sel.innerHTML = MODELS.map((m) => `<option value="${m.key}">${esc(m.label)}</option>`).join('');
+  sel.value = s.modelKey;
+  $('#customId').value = s.customId;
+  $('#customModel').value = s.customModel;
+  $('#customLib').value = s.customLib;
+  $('#temperature').value = s.temperature;
+  $('#maxTokens').value = s.maxTokens;
+  $('#selfCheck').checked = !!s.selfCheck;
+  $('#autoLoad').checked = !!s.autoLoad;
+  $('#gpuInfo').textContent = state.gpu.ok
+    ? `WebGPU is available${state.gpu.f16 ? ' (fast 16-bit mode)' : ' (compatibility 32-bit mode)'}.`
+    : state.gpu.reason;
+}
+
+function refreshBrain() {
+  const items = memory.list();
+  $('#memCount').textContent =
+    `${items.length} lesson${items.length === 1 ? '' : 's'} saved in this browser. ${state.kb.length} notes loaded.`;
+  $('#memList').innerHTML = items.length
+    ? items
+        .map(
+          (x) =>
+            `<li><div><strong>${esc(x.q)}</strong><div class="muted">${esc(x.a.slice(0, 120))}${x.a.length > 120 ? '...' : ''}</div></div>` +
+            `<button type="button" data-del="${esc(x.id)}">Delete</button></li>`
+        )
+        .join('')
+    : '<li class="muted">Nothing yet. Use "Good answer" or "Correct it" under a reply, or add a lesson above.</li>';
+}
+
+function openBrain(q = '', a = '') {
+  $('#teachQ').value = q;
+  $('#teachA').value = a;
+  refreshBrain();
+  const dlg = $('#brainDlg');
+  if (!dlg.open) dlg.showModal();
+}
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ------------------------------------------------------------------ wiring */
+
+function precedingQuestion(i) {
+  for (let k = i - 1; k >= 0; k--) if (state.messages[k].role === 'user') return state.messages[k].content;
+  return '';
+}
+
+function wire() {
+  const input = $('#input');
+  const autosize = () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 220) + 'px';
+  };
+
+  $('#modeList').innerHTML = Object.entries(MODE_LABELS)
+    .map(([k, v]) => `<button type="button" data-mode="${k}" aria-pressed="false">${v}</button>`)
+    .join('');
+  if (!MODE_LABELS[state.settings.mode]) state.settings.mode = 'ask';
+  updateModes();
+  $('#modeList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mode]');
+    if (!b) return;
+    state.settings.mode = b.dataset.mode;
+    saveSettings();
+    updateModes();
+    closeRail();
+    input.focus();
+  });
+  $('#railToggle').addEventListener('click', () => {
+    const open = document.body.classList.toggle('rail-open');
+    $('#railToggle').setAttribute('aria-expanded', String(open));
+  });
+  $('#scrim').addEventListener('click', closeRail);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeRail();
+  });
+  $('#tree').addEventListener('click', (e) => {
+    const n = e.target.closest('[data-note],[data-lesson]');
+    if (!n) return;
+    if (n.dataset.note) openNote('note', n.dataset.note);
+    else openNote('lesson', n.dataset.lesson);
+  });
+
+  $('#composer').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || state.busy) return;
+    input.value = '';
+    autosize();
+    ask(text);
+  });
+  input.addEventListener('input', autosize);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      $('#send').click();
+    }
+  });
+
+  $('#stop').addEventListener('click', () => state.abort && state.abort.abort());
+  $('#newBtn').addEventListener('click', () => {
+    if (state.abort) state.abort.abort();
+    state.messages = [];
+    saveChat();
+    renderAll();
+    setStatus('');
+  });
+  $('#loadBtn').addEventListener('click', loadModel);
+
+  box.addEventListener('click', async (e) => {
+    const starter = e.target.closest('[data-starter]');
+    if (starter) {
+      input.value = starter.dataset.starter;
+      autosize();
+      input.focus();
+      return;
+    }
+    const copy = e.target.closest('button.copy');
+    if (copy) {
+      const code = codeText(copy.closest('.code'));
+      try {
+        await navigator.clipboard.writeText(code);
+        copy.textContent = 'Copied';
+      } catch {
+        copy.textContent = 'Select and copy';
+      }
+      setTimeout(() => (copy.textContent = 'Copy'), 1400);
+      return;
+    }
+    const btn = e.target.closest('[data-act]');
+    if (!btn || state.busy) return;
+    const msgEl = btn.closest('.msg.assistant');
+    const i = msgEl ? Number(msgEl.dataset.i) : state.messages.length - 1;
+    const m = state.messages[i];
+    const q = precedingQuestion(i);
+    if (btn.dataset.act === 'good' && m && q) {
+      memory.add(q, m.content, 'liked');
+      rebuildMemIndex();
+      btn.textContent = 'Saved';
+      btn.disabled = true;
+    } else if (btn.dataset.act === 'fix' && m) {
+      openBrain(q, m.content);
+    } else if (btn.dataset.act === 'retry' && q) {
+      // drop everything after the question and ask again
+      const qi = state.messages.map((x) => x.role).lastIndexOf('user');
+      state.messages.length = qi;
+      ask(q);
+    } else if (btn.dataset.act === 'continue') {
+      ask('Continue exactly where you stopped.');
+    }
+  });
+
+  /* settings */
+  $('#settingsBtn').addEventListener('click', () => {
+    fillSettings();
+    $('#settingsDlg').showModal();
+  });
+  $('#cancelSettings').addEventListener('click', () => $('#settingsDlg').close());
+  $('#settingsForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    Object.assign(state.settings, {
+      modelKey: $('#modelKey').value,
+      customId: $('#customId').value.trim(),
+      customModel: $('#customModel').value.trim(),
+      customLib: $('#customLib').value.trim(),
+      temperature: Math.min(1, Math.max(0, Number($('#temperature').value) || 0.2)),
+      maxTokens: Math.min(2048, Math.max(256, Number($('#maxTokens').value) || 1024)),
+      selfCheck: $('#selfCheck').checked,
+      autoLoad: $('#autoLoad').checked,
+    });
+    saveSettings();
+    $('#settingsDlg').close();
+    if (state.brain.ready) setStatus('Model changes apply after you reload the page.');
+  });
+
+  /* brain / lessons */
+  $('#brainBtn').addEventListener('click', () => openBrain());
+  $('#closeBrain').addEventListener('click', () => $('#brainDlg').close());
+  $('#teachSave').addEventListener('click', () => {
+    if (memory.add($('#teachQ').value, $('#teachA').value, 'taught')) {
+      rebuildMemIndex();
+      $('#teachQ').value = '';
+      $('#teachA').value = '';
+      refreshBrain();
+    }
+  });
+  $('#memList').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del]');
+    if (!del) return;
+    memory.remove(del.dataset.del);
+    rebuildMemIndex();
+    refreshBrain();
+  });
+  $('#exportMem').addEventListener('click', () => download('luauforge-lessons.md', memory.exportText()));
+  $('#importMem').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const n = memory.importText(await file.text());
+    rebuildMemIndex();
+    refreshBrain();
+    setStatus(`Imported ${n} lesson${n === 1 ? '' : 's'}.`);
+    e.target.value = '';
+  });
+  $('#clearMem').addEventListener('click', () => {
+    if (confirm('Delete every lesson saved in this browser?')) {
+      memory.clear();
+      rebuildMemIndex();
+      refreshBrain();
+    }
+  });
+
+  /* checker */
+  $('#checkBtn').addEventListener('click', () => $('#checkDlg').showModal());
+  $('#closeCheck').addEventListener('click', () => $('#checkDlg').close());
+  $('#runCheck').addEventListener('click', () => {
+    const code = $('#checkCode').value;
+    const out = $('#checkOut');
+    if (!code.trim()) {
+      out.innerHTML = '<p class="muted">Paste a script first.</p>';
+      return;
+    }
+    out.innerHTML = `<div class="lint">${outputHTML(lintLuau(code))}</div>`;
+  });
+}
+
+/* ------------------------------------------------------------------ boot */
+
+async function boot() {
+  wire();
+  renderAll();
+  box.scrollTop = box.scrollHeight;
+  rebuildMemIndex();
+  setPill('Docs mode', 'idle');
+
+  const [kb, gpu] = await Promise.all([loadKB('./').catch(() => []), probeGPU()]);
+  state.kb = kb;
+  state.kbIndex = new Index(kb);
+  state.gpu = gpu;
+  renderTree();
+
+  if (!kb.length) {
+    setStatus('Could not load the knowledge base. Open the site through a web server (GitHub Pages or `python3 -m http.server`), not from a file.');
+  }
+  if (location.protocol === 'file:') {
+    setStatus('You opened this page as a file. Docs mode works. To use the AI model, host the page (GitHub Pages) or run python3 -m http.server and open http://localhost:8000.');
+  }
+  if (!gpu.ok) {
+    $('#loadBtn').disabled = true;
+    $('#loadBtn').title = gpu.reason;
+    setPill('Docs mode (no WebGPU)', 'idle');
+  } else if (state.settings.autoLoad && LS.get('luauforge.loadedOnce', false)) {
+    loadModel();
+  }
+}
+
+boot();
+
+return {  };
+})();
+
+</script>
+</body>
+</html>
